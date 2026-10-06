@@ -39,6 +39,7 @@ playwright-report/
 test-results/
 *.tar
 *.tar.gz
+!/docker-images/*.tar
 
 # IDE and operating system
 .DS_Store

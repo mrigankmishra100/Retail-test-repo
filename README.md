@@ -23,7 +23,9 @@ it with this copy. Existing V2 image manifests and the deployment instructions
 below are historical references; use the V4 deployment record for current tags.
 
 The private `.env`, credentials, database wallets, dependencies, generated test
-results and Docker image archives are excluded. Docker build recipes and test
+results are excluded. The five deployed Docker image archives are available through
+Git LFS in [docker-images](docker-images/README.md), including the Langfuse backend
+binary (its integration source is not in this snapshot). Docker build recipes and test
 source are included. Fill the example environment values locally; no working
 credentials are provided in this branch.
 
@@ -59,7 +61,8 @@ Source for the current single-replica OCI Hosted Applications POC: the complete
 React UI, backend API, Retail agent, Supplier agent and remote MCP server.
 See [DEPLOYMENT.md](DEPLOYMENT.md) and
 [deployment/active-images.json](deployment/active-images.json) for current image
-references. Container images remain in OCIR, not Git.
+references. Container images remain in OCIR; V4 also includes the deployed image
+archives through Git LFS as described above.
 
 ## Current features
 

@@ -1,0 +1,55 @@
+{
+  "verified_active_on": "2026-10-06",
+  "platform": "linux/amd64",
+  "format": "docker save",
+  "storage": "git-lfs",
+  "registry_prefix": "hyd.ocir.io/ax4qsxvnsmtm/retail-inventory",
+  "total_bytes": 1398263808,
+  "images": [
+    {
+      "component": "frontend",
+      "tag": "deployment-v4-chat-first-20261005",
+      "archive": "frontend-deployment-v4-chat-first-20261005.tar",
+      "bytes": 166559232,
+      "archive_sha256": "071b0a21ad25b91483313e9e406cdd63f5086a87bd8032d6e35d2c2b01c403ae",
+      "registry_digest": "sha256:30c3d052bc5549af91cad126803368b335941a58e7f96916f0945abc82e01cd0"
+    },
+    {
+      "component": "backend",
+      "tag": "langfuse-backend-20260922-v1",
+      "archive": "backend-langfuse-backend-20260922-v1.tar",
+      "bytes": 310073856,
+      "archive_sha256": "a6d991485c3a812f6eb0d8819c2bb09c0eb65e811f31c1c3b87d23b3e5e82f81",
+      "registry_digest": "sha256:e8988e50a4ccc73a5a28cb5bf95d4cb4b4b2beeb3088ca46b4147903da0397a9"
+    },
+    {
+      "component": "retail-agent",
+      "tag": "deployment-v2-20260918",
+      "archive": "retail-agent-deployment-v2-20260918.tar",
+      "bytes": 307210240,
+      "archive_sha256": "a869a1111b21eff75d4e0bd4878d2f5b08b3813ce2439266441d2c48e948960e",
+      "registry_digest": "sha256:e840a1e6881ae54668c934f9020244a9f8d8244c387d8fab5893db2f2925052b"
+    },
+    {
+      "component": "supplier-agent",
+      "tag": "deployment-v2-20260918",
+      "archive": "supplier-agent-deployment-v2-20260918.tar",
+      "bytes": 307210240,
+      "archive_sha256": "fb96434f836b41c027101e655a828165ff95e15e33d3da2a7c08a0b01eec88c7",
+      "registry_digest": "sha256:25e74152c985c006023ee8d231741a701db62ac9eeb93e75a480f990a7276235"
+    },
+    {
+      "component": "mcp-server",
+      "tag": "deployment-v2-20260918",
+      "archive": "mcp-server-deployment-v2-20260918.tar",
+      "bytes": 307210240,
+      "archive_sha256": "583a8394c0bc163f9eb9f904d73e283fe6ad9ebc5378854812de808509396821",
+      "registry_digest": "sha256:5bd536005a839c3bcc2cfa5d7e2ab7eebe782ce70c5c236d8d02ea2737b061e3"
+    }
+  ],
+  "credential_scan": {
+    "unique_layers_scanned": 28,
+    "findings": [],
+    "scope": "known local secrets and credential file/private-key block indicators, including all saved layers; not a comprehensive audit"
+  }
+}
