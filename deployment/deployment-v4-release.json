@@ -1,0 +1,62 @@
+{
+  "recorded_on": "2026-10-05",
+  "branch": "Deployment_v4",
+  "application_source_revision": "afbc71a1e40f38c5879b0f883fd328adc9112024",
+  "region": "ap-hyderabad-1",
+  "status": "deployed_and_read_only_smoke_verified",
+  "frontend": {
+    "image": "hyd.ocir.io/ax4qsxvnsmtm/retail-inventory/frontend:deployment-v4-chat-first-20261005",
+    "digest": "sha256:30c3d052bc5549af91cad126803368b335941a58e7f96916f0945abc82e01cd0",
+    "platform": "linux/amd64",
+    "dockerfile": "frontend/Dockerfile.chat-first",
+    "base_runtime_digest": "sha256:20e256d4d587b5e7545394c229d2a2bbe890c9cc184072455e0ed61c30a31161",
+    "active_artifact_id": "55473",
+    "deployment_id": "ocid1.generativeaihosteddeployment.oc1.ap-hyderabad-1.amaaaaaau6bxbdqa6r4fabvebhitoclucubir6n622j7z5o5gp74kpkrpp2a",
+    "rollback_artifact_id": "50691",
+    "rollback_tag": "deployment-v2-20260918",
+    "work_request": "ocid1.generativeaiworkrequest.oc1.ap-hyderabad-1.amaaaaaau6bxbdqaj4g4idzdi4d23ie5rypk2invb33fycboz5ktqc33uibq"
+  },
+  "preserved_images": {
+    "backend": "langfuse-backend-20260922-v1",
+    "retail-agent": "deployment-v2-20260918",
+    "supplier-agent": "deployment-v2-20260918",
+    "mcp-server": "deployment-v2-20260918"
+  },
+  "private_config": {
+    "bucket": "retail-inventory-config-private",
+    "namespace": "ax4qsxvnsmtm",
+    "only_content_change": "ENTERPRISE_AI_NL2SQL_ENABLED: false -> true",
+    "retail": {
+      "active_object": "retail-agent-deployment-v4-20261005.json",
+      "rollback_object": "retail-agent-v1.json",
+      "work_request": "ocid1.generativeaiworkrequest.oc1.ap-hyderabad-1.amaaaaaau6bxbdqaobwbcsot3j7tdinpo5lil7g7hsciyh5b35xghrbj7pma"
+    },
+    "mcp": {
+      "active_object": "mcp-deployment-v4-20261005.json",
+      "rollback_object": "mcp-v1.json",
+      "work_request": "ocid1.generativeaiworkrequest.oc1.ap-hyderabad-1.amaaaaaau6bxbdqala4igj5phdvmg7ye2rzujdfftmnn3ozlotzmpk6jw7iq"
+    },
+    "rollout_method": "Updated only APP_CONFIG_OBJECT_NAME on each hosted application; all other environment variables preserved. Original v1 objects unchanged."
+  },
+  "verification": {
+    "frontend_build": "passed",
+    "mocked_browser_tests": 15,
+    "nl2sql_unit_tests": 10,
+    "image_hosted_prefix_static_assets_and_mocked_proxy": "passed",
+    "all_five_applications_and_deployments": "ACTIVE",
+    "all_three_rollout_work_requests": "SUCCEEDED",
+    "live_frontend_new_javascript_asset": "index-D0US7qOA.js",
+    "live_frontend_and_backend_health": 200,
+    "live_backend_readiness": "ready",
+    "live_inventory_http": 200,
+    "live_mcp_query_retail_data": {"status": "completed", "row_count": 5},
+    "live_frontend_chat": {"http_status": 200, "response_route": "NL2SQL", "llm_status": "completed", "used_tools": ["query_retail_data"]},
+    "test_side_effects": "Temporary retail session and one persisted read-only test chat; test session revoked. No case, approval, order or notification created.",
+    "full_vulnerability_scan": "not performed; existing frontend runtime preserved"
+  },
+  "notes": [
+    "Backend readiness reports local AI flags disabled because retail chat is forwarded to the separate Retail agent. End-to-end chat confirms NL2SQL execution there through MCP.",
+    "The repository backend is V2 source, not the separately deployed Langfuse backend; do not overwrite that cloud image from this source copy.",
+    "Rollback requires explicit activation of the previous frontend artifact and restoring APP_CONFIG_OBJECT_NAME on Retail/MCP, then waiting for successful rollouts."
+  ]
+}

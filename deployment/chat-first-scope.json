@@ -1,0 +1,23 @@
+{
+  "scope": "Frontend-only code simplification deployed 2026-10-05. Retail/MCP configuration-only rollouts enable NL2SQL; backend and supplier preserved. See deployment-v4-release.json.",
+  "source_baseline": "deployment_v2 at 1bf6fcb; application release source ba4da521dba5b1da6a4331a99c1735aa20f9ea3a",
+  "important": "The copied backend directory is the V2 frontend build dependency, NOT an export of the deployed Langfuse backend. Do not rebuild or deploy all five services from this folder.",
+  "planned_changed_image": "frontend",
+  "unchanged_cloud_images": {
+    "backend": "langfuse-backend-20260922-v1",
+    "retail-agent": "deployment-v2-20260918",
+    "supplier-agent": "deployment-v2-20260918",
+    "mcp-server": "deployment-v2-20260918"
+  },
+  "backend_contract": "Existing workflow, selection, draft preview, decision, dispatch and completion endpoints. No new approval bypass or model-generated action execution.",
+  "chat_behavior": {
+    "retail_questions": "Use the existing /chat conversation endpoint and configured OCI Responses integration.",
+    "greetings_and_context": "Simple greetings are local UI replies. Saved workflows are resumed explicitly; model request context is opt-in. New chat resets the model conversation without deleting saved requests.",
+    "presentation": "Compact conversational supplier choices and one next action per request. Exact terms and email are revealed for explicit review before approval controls are shown.",
+    "workflow_actions": "Explicit inline controls invoke existing agent workflow APIs.",
+    "supplier_chat": "Guided request selection and existing supplier workflow checks. No new free-form supplier LLM endpoint was added.",
+    "human_approval": "Explicit review checkbox and decision buttons bound to case version and draft hash. Sending remains a separate action.",
+    "durability": "Request IDs and uncertain assessment idempotency keys survive refresh within the current browser session. Conversational UI text is in-memory. Authoritative requests and decisions remain in the backend."
+  },
+  "verification": "npm run build; npx playwright test --config playwright.chat.config.js (mocked APIs only; no live OCI notifications)"
+}
