@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Little Calculator</title><link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
+</head>
+<body>
+<div class="page">
+<header><a class="brand" href="/" aria-label="Little Calculator home"><span class="brand-mark">＋</span>little calculator<span class="brand-dot">.</span></a><span class="status" id="status"><span></span>Connecting to server</span></header>
+<main>
+<section class="intro"><div class="eyebrow">SMALL APP. REAL DEPLOYMENT.</div><h1>A little space<br>to work things out.</h1><p>Two numbers. Four operations. Your answer,<br class="desktop-break"> calculated on the server.</p></section>
+<div class="workspace">
+<section class="calculator" aria-labelledby="calculatorTitle">
+<div class="card-heading"><h2 id="calculatorTitle">Make a calculation</h2><span class="step-tag">01 / INPUT</span></div>
+<form id="calculatorForm">
+<div class="inputs"><label>First number<input id="a" name="a" type="text" inputmode="decimal" value="12" maxlength="64" autocomplete="off" required></label><span class="between" id="between" aria-hidden="true">+</span><label>Second number<input id="b" name="b" type="text" inputmode="decimal" value="8" maxlength="64" autocomplete="off" required></label></div>
+<fieldset><legend>Choose an operation</legend><div class="operations">
+<button type="button" data-operation="add" class="operation selected" aria-pressed="true"><span>+</span>Add</button>
+<button type="button" data-operation="subtract" class="operation" aria-pressed="false"><span>−</span>Subtract</button>
+<button type="button" data-operation="multiply" class="operation" aria-pressed="false"><span>×</span>Multiply</button>
+<button type="button" data-operation="divide" class="operation" aria-pressed="false"><span>÷</span>Divide</button>
+</div></fieldset>
+<button class="calculate" id="calculate" type="submit">Calculate result <span aria-hidden="true">↗</span></button>
+<p class="keyboard-hint">You can also press Enter</p>
+<p id="error" class="error" role="alert" hidden></p>
+</form>
+<div class="answer" aria-live="polite"><div class="answer-label"><span>YOUR ANSWER</span><span id="equation">Ready when you are</span></div><output id="result">—</output><div class="answer-bottom"><span id="resultNote">A fresh start for every calculation.</span><button id="useResult" type="button" hidden>Use this result →</button></div></div>
+</section>
+<aside class="history-card" aria-labelledby="historyTitle"><div class="card-heading"><h2 id="historyTitle">This session</h2><button id="clearHistory" type="button" disabled>Clear</button></div><div id="emptyHistory" class="empty-history"><span class="empty-symbol" aria-hidden="true">=</span><h3>Your working space.</h3><p>Recent calculations will appear here.<br>Nothing is saved after a refresh.</p></div><ol id="history" aria-label="Recent calculations"></ol><div class="session-note"><span class="note-mark">↗</span><p>Every answer comes from the running application server.</p></div></aside>
+</div>
+</main>
+<footer><span>Built small. Ready to run.</span><span id="region">Checking deployment…</span><a href="/health" target="_blank" rel="noopener">Service health ↗</a></footer>
+</div>
+</body></html>

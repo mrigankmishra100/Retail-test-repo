@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "name": "calculator-demo",
+  "resources": {},
+  "generated_secrets": [],
+  "services": {
+    "web": {
+      "image": {
+        "dockerfile": "Dockerfile",
+        "context": "."
+      },
+      "port": 8080,
+      "health_path": "/health",
+      "public": true,
+      "resource_principal": false,
+      "environment": {
+        "DEPLOYMENT_REGION": {
+          "ref": "account.region"
+        }
+      }
+    }
+  }
+}
