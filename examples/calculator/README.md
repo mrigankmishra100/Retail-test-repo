@@ -19,3 +19,7 @@ GET /health returns service readiness and the configured region. The prototype U
 ## Local preview
 
 Run `python server.py --host 127.0.0.1 --port 8790`, then open http://127.0.0.1:8790.
+
+## Base image source
+
+The Dockerfile downloads the official Python image from Docker's verified Amazon ECR Public repository: https://gallery.ecr.aws/docker/library/python. This avoids the Docker Hub download endpoint that currently fails certificate verification on this machine. TLS verification stays enabled. No AWS account is needed; the built application image is still uploaded to OCIR and deployed on OCI.
