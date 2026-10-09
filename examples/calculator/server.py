@@ -68,7 +68,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlsplit(self.path).path
-        if path == "/health":
+        if path in {"/health", "/ready"}:
             return self.json(200, {"status": "healthy", "service": "calculator",
                                   "region": os.environ.get("DEPLOYMENT_REGION", "local")})
         files = {"/": ("index.html", "text/html"), "/app.js": ("app.js", "text/javascript"),

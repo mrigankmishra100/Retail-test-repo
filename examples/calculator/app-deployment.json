@@ -17,7 +17,8 @@
         "DEPLOYMENT_REGION": {
           "ref": "account.region"
         }
-      }
+      },
+      "readiness_path": "/ready"
     }
   }
 }

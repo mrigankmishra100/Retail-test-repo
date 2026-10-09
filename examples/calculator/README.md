@@ -1,25 +1,23 @@
 # Little Calculator
 
-A visible calculator webpage with a Python API. No third-party Python dependencies, databases, buckets, notification topics or app secrets are needed.
+The same calculator source supports both Deployment Lab targets. It serves a browser UI, `/api/calculate`, `/health` and `/ready`; no database or application secrets are required.
 
-## Deploy with Deployment Lab
+## Deploy from GitHub
 
-- Workflow: Automatic app + resources
-- GitHub repository: https://github.com/mrigankmishra100/Retail-test-repo
+- Repository: https://github.com/mrigankmishra100/Retail-test-repo
 - Branch: main
 - Application folder: examples/calculator
-- Provide your initial OCI/OCIR credentials and have a Docker-compatible Linux builder running, then select Deploy application.
+- Source commit: leave blank to fetch the updated branch. An old pinned commit will still contain the old image inputs.
+- Workflow: Automatic app + resources
 
-The deployment engine reads app-deployment.json. It creates a new child compartment, VCN/subnet, internet gateway, routing/security rules, OCIR repository and one container instance. This example does not request databases, buckets, notification topics or application IAM policies. It receives the OCI region automatically as DEPLOYMENT_REGION.
+Choose **Generative AI Applications** for a no-auth application with managed networking. The image starts on `0.0.0.0:8080`; runtime port/command overrides are not applied. The engine uploads to OCIR, creates the app and active deployment, polls status, and shows the hostname OCI returns. No customer VCN/subnet or compartment is created for this target. Runtime IAM still needs private OCIR access; it is separate from app login.
 
-When healthy, use Open application in the dashboard. The webpage supports addition, subtraction, multiplication and division, with recent calculations kept only in page memory. Calculations go to the Python server, so this checks frontend-to-server connectivity. Decimal results use up to 28 significant digits.
+Choose **OCI Container Instances** to retain the existing deployment route and selected network mode. Its optional port/command override can continue using 8003. Both `/health` and `/ready` work on the configured listening port.
 
-GET /health returns service readiness and the configured region. The prototype URL uses HTTP on port 8080. No live OCI deployment is included with these files.
+Run readiness before Deploy. Docker/Rancher must be running for a fresh local build. The changed server and recipe invalidate the old image cache; retries of the same new commit may reuse the verified new image. Existing OCI deployments/images are not changed by publishing this source update.
 
-## Local preview
+The no-auth GenAI configuration was observed on existing apps in this tenancy, but a new calculator hosted deployment and frontend/static-asset delivery still need a live test. ACTIVE status alone does not verify the full UI.
 
-Run `python server.py --host 127.0.0.1 --port 8790`, then open http://127.0.0.1:8790.
+## Build image
 
-## Base image source
-
-The Dockerfile downloads the official Python image from Docker's verified Amazon ECR Public repository: https://gallery.ecr.aws/docker/library/python. This avoids the Docker Hub download endpoint that currently fails certificate verification on this machine. TLS verification stays enabled. No AWS account is needed; the built application image is still uploaded to OCIR and deployed on OCI.
+The Dockerfile uses the official Python image mirrored in ECR Public to avoid the Docker Hub connection issue previously encountered on this machine. TLS verification stays enabled. The app still deploys to OCI, and no AWS account is needed.

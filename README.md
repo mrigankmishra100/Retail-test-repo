@@ -134,3 +134,8 @@ the currently served UI. The full-source build does not require an old UI bundle
 Local test additions, private configuration, policy PDFs, exported logs and
 historical troubleshooting artifacts are excluded from the deployment commit.
 Previously tracked baseline tests remain, but are not the full release suite.
+
+
+## Deployment Lab trials
+
+Use `examples/calculator` for the first Generative AI no-auth deployment. Its recipe supports both deployment targets. The root `manifest.json` is the planned five-service retail deployment, including DB/wallet/initialization requirements; it is intentionally blocked until the next-phase engine support is implemented. See [one-click deployment notes](deployment/ONE_CLICK_DEPLOYMENT.md).

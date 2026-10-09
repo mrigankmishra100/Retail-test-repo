@@ -1,0 +1,457 @@
+{
+  "version": 1,
+  "deployment_status": "planned",
+  "name": "retail-inventory",
+  "deployment_target": "generative_ai",
+  "authentication": "NO_AUTH_CONFIG",
+  "description": "Five-service deployment plan for the next phase. Readiness must block this plan before any OCI mutation until all prerequisites below are implemented and verified.",
+  "blockers": [
+    "hosted-database-connectivity",
+    "database-schema-initialization",
+    "database-wallet-distribution",
+    "structured-json-environment-bindings",
+    "hosted-invoke-url-bindings",
+    "policy-object-upload"
+  ],
+  "resources": {
+    "database": {
+      "type": "database",
+      "storage_gbs": 20,
+      "ecpu": 2
+    },
+    "wallets": {
+      "type": "bucket"
+    },
+    "policies": {
+      "type": "bucket"
+    },
+    "notifications": {
+      "type": "topic"
+    }
+  },
+  "generated_secrets": [
+    "retail-service-key",
+    "supplier-service-key",
+    "mcp-retail-key",
+    "mcp-supplier-key"
+  ],
+  "database_initialization": {
+    "resource": "database",
+    "target": "new-empty-application-schema-only",
+    "sql_files": [
+      "database/schema.sql",
+      "database/seed.sql"
+    ],
+    "migrations_for_existing_databases_only": [
+      "database/migrations/001_phase5_case_persistence.sql",
+      "database/migrations/002_uuid_identifier_widths.sql",
+      "database/migrations/003_chat_persistence.sql",
+      "database/migrations/004_agent_registry.sql"
+    ],
+    "runner_status": "not-implemented",
+    "note": "scripts/setup_db.py is a placeholder. Fresh schema already includes migrations; do not run them again. Use a SQLcl-aware runner or reviewed SQL/PLSQL parser, not splitting statements on semicolons."
+  },
+  "wallet_distribution": {
+    "source": "generated Autonomous Database wallet",
+    "bucket": {
+      "ref": "resources.wallets.name"
+    },
+    "object_name": "database-wallet.zip",
+    "runtime_directory": "/tmp",
+    "private": true
+  },
+  "object_uploads": [
+    {
+      "source_directory": "policies",
+      "bucket": {
+        "ref": "resources.policies.name"
+      },
+      "private": true
+    }
+  ],
+  "services": {
+    "mcp-server": {
+      "image": {
+        "archive": "docker-images/mcp-server-deployment-v2-20260918.tar",
+        "sha256": "583a8394c0bc163f9eb9f904d73e283fe6ad9ebc5378854812de808509396821"
+      },
+      "port": 8080,
+      "health_path": "/health",
+      "readiness_path": "/ready",
+      "public": false,
+      "resource_principal": true,
+      "depends_on": [],
+      "environment": {
+        "APP_ENV": "development",
+        "HOSTED_PROBE_MODE": "true",
+        "OCI_AUTH_MODE": "resource_principal",
+        "OCI_REGION": {
+          "ref": "account.region"
+        },
+        "OCI_COMPARTMENT_ID": {
+          "ref": "account.compartment_id"
+        },
+        "ORACLE_DB_DRIVER_MODE": "thick",
+        "ORACLE_DB_DSN": {
+          "ref": "resources.database.dsn"
+        },
+        "ORACLE_DB_USER": {
+          "ref": "resources.database.user"
+        },
+        "ORACLE_DB_PASSWORD": {
+          "ref": "resources.database.password"
+        },
+        "ORACLE_DB_WALLET_PASSWORD": {
+          "ref": "resources.database.wallet_password"
+        },
+        "ORACLE_DB_WALLET_NAMESPACE": {
+          "ref": "account.namespace"
+        },
+        "ORACLE_DB_WALLET_BUCKET": {
+          "ref": "resources.wallets.name"
+        },
+        "ORACLE_DB_WALLET_OBJECT_NAME": {
+          "ref": "resources.database.wallet_object_name"
+        },
+        "OCI_NAMESPACE": {
+          "ref": "account.namespace"
+        },
+        "OCI_BUCKET_NAME": {
+          "ref": "resources.policies.name"
+        },
+        "OCI_NOTIFICATION_TOPIC_ID": {
+          "ref": "resources.notifications.id"
+        },
+        "OCI_NOTIFICATION_PUBLISH_ENABLED": "false",
+        "OCI_NOTIFICATION_SHARED_POC_ENABLED": "false",
+        "ENTERPRISE_AI_RESPONSES_ENABLED": "false",
+        "ENTERPRISE_AI_CONVERSATION_STATE_ENABLED": "false",
+        "ENTERPRISE_AI_FILE_SEARCH_ENABLED": "false",
+        "ENTERPRISE_AI_NL2SQL_ENABLED": "false",
+        "ENTERPRISE_AI_GUARDRAILS_ENABLED": "false",
+        "ENTERPRISE_AI_MCP_SAFETY_ENABLED": "false",
+        "ENTERPRISE_AI_AGENT_REGISTRY_ENABLED": "false",
+        "ENTERPRISE_AI_MCP_REGISTRY_ENABLED": "false",
+        "LANGSMITH_TRACING": "false",
+        "REMOTE_MCP_ENABLED": "false",
+        "REMOTE_MCP_SERVICE_KEYS": {
+          "json_object": {
+            "retail": {
+              "ref": "secrets.mcp-retail-key"
+            },
+            "supplier": {
+              "ref": "secrets.mcp-supplier-key"
+            }
+          }
+        }
+      }
+    },
+    "retail-agent": {
+      "image": {
+        "archive": "docker-images/retail-agent-deployment-v2-20260918.tar",
+        "sha256": "a869a1111b21eff75d4e0bd4878d2f5b08b3813ce2439266441d2c48e948960e"
+      },
+      "port": 8080,
+      "health_path": "/health",
+      "readiness_path": "/ready",
+      "public": false,
+      "resource_principal": true,
+      "depends_on": [
+        "mcp-server"
+      ],
+      "environment": {
+        "APP_ENV": "development",
+        "HOSTED_PROBE_MODE": "true",
+        "OCI_AUTH_MODE": "resource_principal",
+        "OCI_REGION": {
+          "ref": "account.region"
+        },
+        "OCI_COMPARTMENT_ID": {
+          "ref": "account.compartment_id"
+        },
+        "ORACLE_DB_DRIVER_MODE": "thick",
+        "ORACLE_DB_DSN": {
+          "ref": "resources.database.dsn"
+        },
+        "ORACLE_DB_USER": {
+          "ref": "resources.database.user"
+        },
+        "ORACLE_DB_PASSWORD": {
+          "ref": "resources.database.password"
+        },
+        "ORACLE_DB_WALLET_PASSWORD": {
+          "ref": "resources.database.wallet_password"
+        },
+        "ORACLE_DB_WALLET_NAMESPACE": {
+          "ref": "account.namespace"
+        },
+        "ORACLE_DB_WALLET_BUCKET": {
+          "ref": "resources.wallets.name"
+        },
+        "ORACLE_DB_WALLET_OBJECT_NAME": {
+          "ref": "resources.database.wallet_object_name"
+        },
+        "OCI_NAMESPACE": {
+          "ref": "account.namespace"
+        },
+        "OCI_BUCKET_NAME": {
+          "ref": "resources.policies.name"
+        },
+        "OCI_NOTIFICATION_TOPIC_ID": {
+          "ref": "resources.notifications.id"
+        },
+        "OCI_NOTIFICATION_PUBLISH_ENABLED": "false",
+        "OCI_NOTIFICATION_SHARED_POC_ENABLED": "false",
+        "ENTERPRISE_AI_RESPONSES_ENABLED": "false",
+        "ENTERPRISE_AI_CONVERSATION_STATE_ENABLED": "false",
+        "ENTERPRISE_AI_FILE_SEARCH_ENABLED": "false",
+        "ENTERPRISE_AI_NL2SQL_ENABLED": "false",
+        "ENTERPRISE_AI_GUARDRAILS_ENABLED": "false",
+        "ENTERPRISE_AI_MCP_SAFETY_ENABLED": "false",
+        "ENTERPRISE_AI_AGENT_REGISTRY_ENABLED": "false",
+        "ENTERPRISE_AI_MCP_REGISTRY_ENABLED": "false",
+        "LANGSMITH_TRACING": "false",
+        "APPLICATION_ROLE": "retail-agent",
+        "AGENT_SERVICE_KEY": {
+          "ref": "secrets.retail-service-key"
+        },
+        "REMOTE_MCP_ENABLED": "true",
+        "REMOTE_MCP_ENDPOINT": {
+          "ref": "services.mcp-server.invoke_url"
+        },
+        "REMOTE_MCP_SERVICE_KEYS": {
+          "json_object": {
+            "retail": {
+              "ref": "secrets.mcp-retail-key"
+            }
+          }
+        }
+      }
+    },
+    "supplier-agent": {
+      "image": {
+        "archive": "docker-images/supplier-agent-deployment-v2-20260918.tar",
+        "sha256": "fb96434f836b41c027101e655a828165ff95e15e33d3da2a7c08a0b01eec88c7"
+      },
+      "port": 8080,
+      "health_path": "/health",
+      "readiness_path": "/ready",
+      "public": false,
+      "resource_principal": true,
+      "depends_on": [
+        "mcp-server"
+      ],
+      "environment": {
+        "APP_ENV": "development",
+        "HOSTED_PROBE_MODE": "true",
+        "OCI_AUTH_MODE": "resource_principal",
+        "OCI_REGION": {
+          "ref": "account.region"
+        },
+        "OCI_COMPARTMENT_ID": {
+          "ref": "account.compartment_id"
+        },
+        "ORACLE_DB_DRIVER_MODE": "thick",
+        "ORACLE_DB_DSN": {
+          "ref": "resources.database.dsn"
+        },
+        "ORACLE_DB_USER": {
+          "ref": "resources.database.user"
+        },
+        "ORACLE_DB_PASSWORD": {
+          "ref": "resources.database.password"
+        },
+        "ORACLE_DB_WALLET_PASSWORD": {
+          "ref": "resources.database.wallet_password"
+        },
+        "ORACLE_DB_WALLET_NAMESPACE": {
+          "ref": "account.namespace"
+        },
+        "ORACLE_DB_WALLET_BUCKET": {
+          "ref": "resources.wallets.name"
+        },
+        "ORACLE_DB_WALLET_OBJECT_NAME": {
+          "ref": "resources.database.wallet_object_name"
+        },
+        "OCI_NAMESPACE": {
+          "ref": "account.namespace"
+        },
+        "OCI_BUCKET_NAME": {
+          "ref": "resources.policies.name"
+        },
+        "OCI_NOTIFICATION_TOPIC_ID": {
+          "ref": "resources.notifications.id"
+        },
+        "OCI_NOTIFICATION_PUBLISH_ENABLED": "false",
+        "OCI_NOTIFICATION_SHARED_POC_ENABLED": "false",
+        "ENTERPRISE_AI_RESPONSES_ENABLED": "false",
+        "ENTERPRISE_AI_CONVERSATION_STATE_ENABLED": "false",
+        "ENTERPRISE_AI_FILE_SEARCH_ENABLED": "false",
+        "ENTERPRISE_AI_NL2SQL_ENABLED": "false",
+        "ENTERPRISE_AI_GUARDRAILS_ENABLED": "false",
+        "ENTERPRISE_AI_MCP_SAFETY_ENABLED": "false",
+        "ENTERPRISE_AI_AGENT_REGISTRY_ENABLED": "false",
+        "ENTERPRISE_AI_MCP_REGISTRY_ENABLED": "false",
+        "LANGSMITH_TRACING": "false",
+        "APPLICATION_ROLE": "supplier-agent",
+        "AGENT_SERVICE_KEY": {
+          "ref": "secrets.supplier-service-key"
+        },
+        "REMOTE_MCP_ENABLED": "true",
+        "REMOTE_MCP_ENDPOINT": {
+          "ref": "services.mcp-server.invoke_url"
+        },
+        "REMOTE_MCP_SERVICE_KEYS": {
+          "json_object": {
+            "supplier": {
+              "ref": "secrets.mcp-supplier-key"
+            }
+          }
+        }
+      }
+    },
+    "backend": {
+      "image": {
+        "archive": "docker-images/backend-langfuse-backend-20260922-v1.tar",
+        "sha256": "a6d991485c3a812f6eb0d8819c2bb09c0eb65e811f31c1c3b87d23b3e5e82f81"
+      },
+      "port": 8080,
+      "health_path": "/health",
+      "readiness_path": "/ready",
+      "public": false,
+      "resource_principal": true,
+      "depends_on": [
+        "retail-agent",
+        "supplier-agent"
+      ],
+      "environment": {
+        "APP_ENV": "development",
+        "HOSTED_PROBE_MODE": "true",
+        "OCI_AUTH_MODE": "resource_principal",
+        "OCI_REGION": {
+          "ref": "account.region"
+        },
+        "OCI_COMPARTMENT_ID": {
+          "ref": "account.compartment_id"
+        },
+        "ORACLE_DB_DRIVER_MODE": "thick",
+        "ORACLE_DB_DSN": {
+          "ref": "resources.database.dsn"
+        },
+        "ORACLE_DB_USER": {
+          "ref": "resources.database.user"
+        },
+        "ORACLE_DB_PASSWORD": {
+          "ref": "resources.database.password"
+        },
+        "ORACLE_DB_WALLET_PASSWORD": {
+          "ref": "resources.database.wallet_password"
+        },
+        "ORACLE_DB_WALLET_NAMESPACE": {
+          "ref": "account.namespace"
+        },
+        "ORACLE_DB_WALLET_BUCKET": {
+          "ref": "resources.wallets.name"
+        },
+        "ORACLE_DB_WALLET_OBJECT_NAME": {
+          "ref": "resources.database.wallet_object_name"
+        },
+        "OCI_NAMESPACE": {
+          "ref": "account.namespace"
+        },
+        "OCI_BUCKET_NAME": {
+          "ref": "resources.policies.name"
+        },
+        "OCI_NOTIFICATION_TOPIC_ID": {
+          "ref": "resources.notifications.id"
+        },
+        "OCI_NOTIFICATION_PUBLISH_ENABLED": "false",
+        "OCI_NOTIFICATION_SHARED_POC_ENABLED": "false",
+        "ENTERPRISE_AI_RESPONSES_ENABLED": "false",
+        "ENTERPRISE_AI_CONVERSATION_STATE_ENABLED": "false",
+        "ENTERPRISE_AI_FILE_SEARCH_ENABLED": "false",
+        "ENTERPRISE_AI_NL2SQL_ENABLED": "false",
+        "ENTERPRISE_AI_GUARDRAILS_ENABLED": "false",
+        "ENTERPRISE_AI_MCP_SAFETY_ENABLED": "false",
+        "ENTERPRISE_AI_AGENT_REGISTRY_ENABLED": "false",
+        "ENTERPRISE_AI_MCP_REGISTRY_ENABLED": "false",
+        "LANGSMITH_TRACING": "false",
+        "APPLICATION_ROLE": "backend",
+        "REMOTE_MCP_ENABLED": "false",
+        "AGENT_ENDPOINTS": {
+          "json_object": {
+            "retail": {
+              "ref": "services.retail-agent.invoke_url"
+            },
+            "supplier": {
+              "ref": "services.supplier-agent.invoke_url"
+            }
+          }
+        },
+        "AGENT_SERVICE_KEYS": {
+          "json_object": {
+            "retail": {
+              "ref": "secrets.retail-service-key"
+            },
+            "supplier": {
+              "ref": "secrets.supplier-service-key"
+            }
+          }
+        }
+      }
+    },
+    "frontend": {
+      "image": {
+        "archive": "docker-images/frontend-deployment-v4-chat-first-20261005.tar",
+        "sha256": "071b0a21ad25b91483313e9e406cdd63f5086a87bd8032d6e35d2c2b01c403ae"
+      },
+      "port": 8080,
+      "health_path": "/health",
+      "readiness_path": "/ready",
+      "public": true,
+      "resource_principal": false,
+      "depends_on": [
+        "backend"
+      ],
+      "environment": {
+        "APP_ENV": "production",
+        "BACKEND_AUTH_MODE": "none",
+        "FRONTEND_ALLOW_ANONYMOUS": "true",
+        "BACKEND_API_CONTRACT": "integrated",
+        "FRONTEND_STATIC_DIR": "/app/static",
+        "BACKEND_INVOKE_BASE": {
+          "ref": "services.backend.invoke_url"
+        }
+      }
+    }
+  },
+  "runtime_settings": {
+    "replicas_per_service": 1,
+    "persist_generated_settings": "encrypted-local-run-store",
+    "upload_existing_customer_config": false,
+    "notification_subscriptions": [],
+    "notes": [
+      "Account credentials are used by the engine, not baked into service images.",
+      "Generate and distribute the four distinct service/delegation keys consistently.",
+      "No-auth is the OCI gateway setting; application session/agent HMAC checks remain in the retail app.",
+      "Hostnames shown to users and OCI invoke bases used by agent validation are different outputs.",
+      "The saved image archives preserve role-specific CMD and native Oracle Thick dependencies. Building from source needs multi-stage target support and access to the pinned base image."
+    ]
+  },
+  "optional_ai": {
+    "enabled": false,
+    "reason": "Infrastructure-first plan; live model-assisted chat and vector search are not configured by this manifest.",
+    "initial_inputs_when_enabled": [
+      "model or endpoint choice",
+      "customer GenAI project",
+      "customer GenAI API key if using that auth mode",
+      "policy documents for vector ingestion"
+    ],
+    "future_steps": [
+      "Configure runtime model identity and permissions",
+      "Create/select customer project and vector store",
+      "Ingest customer policies explicitly",
+      "Enable Responses/Conversations after readiness checks"
+    ]
+  }
+}
