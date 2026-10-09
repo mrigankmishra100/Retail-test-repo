@@ -22,6 +22,12 @@ The paired dashboard recipe is `retail-v4-20261009.4`. An older dashboard will
 reject this manifest until updated; arbitrary replacement images are not trusted.
 Run offline diagnostic tests with `python tests/test_notification_probe.py`.
 
+**Manifest selection:** `docker-images/manifest.json` is the current saved-image
+inventory for that paired Studio. The root `manifest.json` is a separate retail
+resource/configuration plan, now aligned to the same release, but still blocked by
+the current local Deployment Lab until its missing capabilities are implemented.
+See [which manifest each workflow uses](deployment/ONE_CLICK_DEPLOYMENT.md).
+
 ## Deployment_v4: local chat-first application
 
 This branch snapshots the working `chat-first-workspace` on 2026-10-05.

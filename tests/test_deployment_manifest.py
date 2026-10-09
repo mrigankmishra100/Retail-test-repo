@@ -29,7 +29,15 @@ def test_calculator_has_both_hosted_probes_and_browser_api():
 
 def test_retail_plan_matches_saved_images_and_schema():
     raw=(ROOT/'manifest.json').read_text();plan=json.loads(raw)
-    images={x['component']:x for x in json.loads((ROOT/'docker-images/manifest.json').read_text())['images']}
+    inventory=json.loads((ROOT/'docker-images/manifest.json').read_text())
+    images={x['component']:x for x in inventory['images']}
+    provenance=json.loads((ROOT/'deployment/notification-checks-20261009.json').read_text())
+    assert plan['release']==inventory['release']==provenance['release']
+    assert plan['image_inventory']=='docker-images/manifest.json'
+    assert plan['image_source_mode']=='saved_archives'
+    updated={x['service']:x for x in provenance['image_changes']}
+    for name,item in updated.items():
+        assert images[name]['archive_sha256']==item['archive_sha256']
     assert plan['deployment_status']=='planned' and 'database-schema-initialization' in plan['blockers']
     assert set(plan['services'])==set(images)=={'backend','retail-agent','supplier-agent','mcp-server','frontend'}
     assert plan['authentication']=='NO_AUTH_CONFIG'
