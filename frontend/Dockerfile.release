@@ -1,0 +1,23 @@
+# Offline-capable release packaging on verified existing dependencies.
+# The standard frontend/Dockerfile remains the clean online rebuild path.
+ARG UI_DEPENDENCY_IMAGE=retail-ui-source-check:deployment-v1
+FROM ${UI_DEPENDENCY_IMAGE} AS build
+WORKDIR /app
+COPY frontend/package*.json ./
+# Reinstall from the lockfile, using only cached package tarballs.
+RUN npm ci --offline --no-audit --no-fund
+COPY frontend/src ./src
+COPY frontend/public ./public
+COPY frontend/index.html frontend/vite.config.js ./
+RUN npm run build
+
+FROM hyd.ocir.io/ax4qsxvnsmtm/retail-inventory/frontend@sha256:02642c916e7e164651341b4d526faf3f6950599f6fa3fd8a029910c91c531768
+ARG RELEASE_TAG=deployment-v2-20260918
+ARG SOURCE_REVISION=uncommitted
+LABEL org.opencontainers.image.version=${RELEASE_TAG} org.opencontainers.image.revision=${SOURCE_REVISION}
+ENV APP_RELEASE_TAG=${RELEASE_TAG}
+COPY --chown=appuser:appuser backend/app /app/app
+COPY --from=build --chown=appuser:appuser /app/dist /app/static
+USER appuser
+EXPOSE 8080
+CMD ["python", "-m", "uvicorn", "app.frontend:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]

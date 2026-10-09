@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.oci-cli-venv/
+.pytest_cache/
+.review-wheels/
+.worktrees/
+
+# Node
+node_modules/
+dist/
+frontend/test-results/
+frontend/playwright-report/
+
+# Environment
+.env
+config/
+runtime-config-private/
+.env.*
+!.env.example
+**/.en
+**/.oci/
+**/.docker/
+*.pem
+*.key
+*.sso
+*.p12
+*.pfx
+*.zip
+tnsnames.ora
+sqlnet.ora
+service-keys*.json
+Logs_*.json
+policy-ingestion-*.jsonl
+
+# Local validation artifacts; source tests already tracked are unaffected.
+playwright-report/
+test-results/
+*.tar
+*.tar.gz
+!/docker-images/*.tar
+
+# IDE and operating system
+.DS_Store
