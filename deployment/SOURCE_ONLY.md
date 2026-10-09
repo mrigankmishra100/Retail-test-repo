@@ -73,7 +73,7 @@ docker build --platform linux/amd64 -f frontend/Dockerfile -t retail-v4-source:f
 
 These use public Python/Node base images, pinned Python dependencies, and the
 checksum-verified official Oracle Instant Client download. No original customer
-OCIR image is pulled. Build once; the four Python service targets share cached layers.
+OCIR image is pulled. The four Python service targets share build stages and can reuse layers when Docker retains the cache; downloads may still be needed.
 Build credentials and customer runtime values are never copied into the images.
 
 ## Deployment engine status
@@ -132,3 +132,22 @@ For the known snapshot before Docker archives were added, use commit `61750a8`.
 A timestamp filter follows commit history, not the time code was actually deployed.
 Pushing an old original branch includes its ancestor history. This public source-only
 branch instead uses a fresh import to avoid publishing image/credential history.
+
+## Verification on 2026-10-09
+
+- 98 offline tests passed, plus 7 subtests (one dependency deprecation warning).
+- React production build passed; built frontend served HTTP 200 locally.
+- Backend API HTTP health startup passed without live OCI configuration.
+- Source-built backend and retail-agent images completed; both passed /health and /ready
+  in temporary containers with networking disabled and read-only filesystems.
+- Oracle Thick native client initialized successfully in the backend image.
+- Supplier-agent and frontend container builds failed on Python package download read
+  timeouts from files.pythonhosted.org; the MCP image build was not reached. These
+  container builds are not claimed as verified. Retry the listed source-build commands
+  when Docker's package-download connectivity is stable.
+- Manifest file paths/targets were checked. Deployment Lab correctly blocks this
+  planned manifest before creating resources.
+- No cloud resources were created or modified. No images were pushed to OCIR.
+- No database-backed, live model or end-to-end five-service workflow was tested.
+- All build/test processes started for this verification exited. The two built images
+  remain only in the local Docker engine, not in this Git branch.
