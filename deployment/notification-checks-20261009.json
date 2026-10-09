@@ -1,0 +1,58 @@
+{
+  "release": "retail-v4-20261009.4",
+  "base_commit": "68ab3f9346ad91474dcbddc55ff3c182ae396779",
+  "date": "2026-10-09",
+  "frontend": "unchanged",
+  "image_changes": [
+    {
+      "service": "backend",
+      "base_archive_sha256": "a6d991485c3a812f6eb0d8819c2bb09c0eb65e811f31c1c3b87d23b3e5e82f81",
+      "archive_sha256": "dfc8664b4a414a2151f07ea584d2e643a322ef741d62daa6b6b0287c366a3cc7",
+      "registry_digest": "sha256:d308094942828afa3b5283d26bea9a4bad7761617f3322d6ee1ab4bbaf0d00a1",
+      "changed_paths": [
+        "app/app/main.py",
+        "app/app/oci/studio_notification_probe.py"
+      ],
+      "probe_sha256": "sha256:b46f6fb8874bc96ff162b70da7cbbde920f0274c5fcdfb00c449ff702832a346"
+    },
+    {
+      "service": "retail-agent",
+      "base_archive_sha256": "a869a1111b21eff75d4e0bd4878d2f5b08b3813ce2439266441d2c48e948960e",
+      "archive_sha256": "4b419c4c87d7ae681ec7ecc03f170a98e343769afb28d539b54703854a05de81",
+      "registry_digest": "sha256:4fe2970a9305870972aadc5a14b72d089ca435cc6eaa20ada5c110fb6cc6a405",
+      "changed_paths": [
+        "app/app/agent_app.py",
+        "app/app/oci/studio_notification_probe.py"
+      ],
+      "probe_sha256": "sha256:b46f6fb8874bc96ff162b70da7cbbde920f0274c5fcdfb00c449ff702832a346"
+    },
+    {
+      "service": "supplier-agent",
+      "base_archive_sha256": "fb96434f836b41c027101e655a828165ff95e15e33d3da2a7c08a0b01eec88c7",
+      "archive_sha256": "f3fb5b7bc5c2ab95e73d8dc67eab5ddf7d80c23073c01a91907102e47afbaade",
+      "registry_digest": "sha256:1090ea1d0b1acac052ee52f7d0e8caec4a9c332195e72c58c2529b6d11d9dce1",
+      "changed_paths": [
+        "app/app/agent_app.py",
+        "app/app/oci/studio_notification_probe.py"
+      ],
+      "probe_sha256": "sha256:b46f6fb8874bc96ff162b70da7cbbde920f0274c5fcdfb00c449ff702832a346"
+    },
+    {
+      "service": "mcp-server",
+      "base_archive_sha256": "583a8394c0bc163f9eb9f904d73e283fe6ad9ebc5378854812de808509396821",
+      "archive_sha256": "d5b5c2a59ae5648f7df094b88b44046e8b9449397d65aa38204e7dd49f043d08",
+      "registry_digest": "sha256:dd78771540b32a5cfb00df099598f57259381cc49352725de75a65b191d06534",
+      "changed_paths": [
+        "app/app/mcp/server.py",
+        "app/app/oci/studio_notification_probe.py"
+      ],
+      "probe_sha256": "sha256:b46f6fb8874bc96ff162b70da7cbbde920f0274c5fcdfb00c449ff702832a346"
+    }
+  ],
+  "validation": {
+    "all_layer_diff_ids_verified": true,
+    "new_cloud_deployment_performed": false,
+    "test_email_sent": false,
+    "diagnostic_source": "backend/app/oci/studio_notification_probe.py"
+  }
+}

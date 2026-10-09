@@ -1,62 +1,63 @@
-# Deployed image archives
+# Reviewed deployment image archives
 
-These five **linux/amd64** Docker save archives match the active OCI image tags
-checked on **2026-10-06**. Total archive size: **1,398,263,808 bytes** (~1.4 GB).
-Files are stored through **Git LFS**, not as ordinary Git blobs. Fetching them
-uses the repository's LFS storage/bandwidth allowance.
+The current manifest is the **retail-v4-20261009.4** notification-verification
+release. These are prebuilt **linux/amd64 Docker-save archives**, stored with
+Git LFS. Deployment Studio downloads and validates them, then uploads to OCIR
+through Registry V2; Docker/Rancher Desktop is not required.
 
-| Component | Image tag |
+| Component | Current archive |
 | --- | --- |
-| Frontend | deployment-v4-chat-first-20261005 |
-| Backend (includes Langfuse) | langfuse-backend-20260922-v1 |
-| Retail agent | deployment-v2-20260918 |
-| Supplier agent | deployment-v2-20260918 |
-| MCP server | deployment-v2-20260918 |
+| Frontend (unchanged) | frontend-deployment-v4-chat-first-20261005.tar |
+| Backend (Langfuse base retained) | backend-notification-checks-20261009.tar |
+| Retail agent | retail-agent-notification-checks-20261009.tar |
+| Supplier agent | supplier-agent-notification-checks-20261009.tar |
+| MCP server | mcp-server-notification-checks-20261009.tar |
 
-The different tags are intentional: V4 updated the frontend image and the
-Retail/MCP runtime configs, not all five images. No images were rebuilt for this
-archive upload. The Langfuse backend archive is the actual deployed binary;
-the repository's backend source remains the V2 baseline.
+Each updated archive preserves the original published image's base layers and
+adds only two files in one layer: the no-send notification probe module and the
+modified service entrypoint that registers it. This is not a rebuild of the
+Langfuse integration from repository source. The source baseline difference
+still applies. The original archives are retained for rollback.
 
-## Download
+## Download and validation
 
-From your local repository checkout with Git LFS installed:
+With Git LFS installed, in this repository:
 
 ```powershell
 git lfs install
-git switch Deployment_v4
+git switch main
 git pull --ff-only
-git lfs pull --include="docker-images/*.tar"
-git lfs ls-files
+git lfs pull --include="docker-images/*notification-checks-20261009.tar,docker-images/frontend-deployment-v4-chat-first-20261005.tar"
 ```
 
-A small text file beginning `version https://git-lfs.github.com/spec/v1` is an
-LFS pointer, not the image. Run `git lfs pull` to download the real archive.
+A file beginning `version https://git-lfs.github.com/spec/v1` is an LFS pointer,
+not the actual archive. GitHub LFS storage/bandwidth allowances apply. Archive
+hashes, byte sizes, image tags and normalized Registry V2 manifest digests are
+in [manifest.json](manifest.json). Archive hashes and registry digests differ.
 
-## Load into Rancher Desktop / Docker
+The paired dashboard must also use recipe **retail-v4-20261009.4**. Older
+recipes intentionally reject changed images. Do not bypass the manifest checks.
 
-Start Rancher Desktop with its Docker-compatible engine, then run these commands
-from the repository root:
+## Notification behavior
 
-```powershell
-docker load --input docker-images/frontend-deployment-v4-chat-first-20261005.tar
-docker load --input docker-images/backend-langfuse-backend-20260922-v1.tar
-docker load --input docker-images/retail-agent-deployment-v2-20260918.tar
-docker load --input docker-images/supplier-agent-deployment-v2-20260918.tar
-docker load --input docker-images/mcp-server-deployment-v2-20260918.tar
-docker image ls
-```
+`GET /status/notifications` performs bounded, cached GetTopic and ListSubscriptions
+checks using the service's configured resource principal. It exposes only status,
+counts, configuration flags and a topic hash: no credentials or email addresses.
+It never calls PublishMessage. A pending subscription is not an IAM denial;
+the recipient must confirm the OCI email before business dispatch can work.
 
-Loading images does not start containers or deploy anything to OCI. The original
-`hyd.ocir.io/ax4qsxvnsmtm/retail-inventory/...` tags are preserved. You still need
-the private runtime configuration, OCI identity/IAM, database access and policies.
-Private configuration files and credentials are **not** supplied in this folder.
+Deployment Studio enables notifications by default, supplies generated private
+configuration and reports runtime access separately from subscription readiness.
+IAM still must grant topic read/publish and subscription inspection. Successful
+GET checks do not prove publishing permission or email delivery. Approval and
+explicit dispatch remain required for business messages.
 
-See [manifest.json](manifest.json) for archive SHA-256 checksums, byte sizes and
-registry digests; an archive checksum is different from a registry image digest.
-Verify a downloaded file with `Get-FileHash -Algorithm SHA256 <archive-path>`.
-The layer scan checked known local secrets and credential-file/private-key
-indicators, with no findings. It is not a full security or vulnerability audit.
+No OCI signing keys, database passwords, wallets or runtime JSON configuration
+are included in this release. Original public base archives were hash-verified;
+all layer diff IDs were verified by the deployment parser. This is not a full
+vulnerability scan or a fresh end-to-end cloud deployment verification.
 
-See [deployment-v4-release.json](../deployment/deployment-v4-release.json) for
-runtime config object names, deployment verification and rollback references.
+See [release provenance](../deployment/notification-checks-20261009.json) for the
+base/new archive hashes and the exact changed paths. Existing historical cloud
+deployment records are retained as history, not rewritten to claim this release
+is already deployed everywhere.

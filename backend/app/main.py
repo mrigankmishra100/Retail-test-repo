@@ -42,6 +42,8 @@ app.state.ready = False
 install_http_contract(app)
 app.add_middleware(HttpLoggingMiddleware, service="retail-api")
 app.state.container = get_container()
+from app.oci.studio_notification_probe import install_fastapi
+install_fastapi(app, lambda: app.state.container.notifications)
 app.state.enterprise_ai_registry = app.state.container.registry
 app.state.langsmith = app.state.container.langsmith
 app.add_middleware(

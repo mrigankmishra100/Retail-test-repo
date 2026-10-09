@@ -18,18 +18,20 @@ INSERT INTO suppliers VALUES ('SUP003', 'Metro Wholesale', 'supplier003@example.
 INSERT INTO suppliers VALUES ('SUP004', 'Prime Retail Supply', 'supplier004@example.com', 'SUP004_policy.pdf');
 
 -- Exactly two or three eligible suppliers per item.
-INSERT INTO supplier_items VALUES ('SUP001', 'ITEM001', 3.20, 2, 50);
-INSERT INTO supplier_items VALUES ('SUP002', 'ITEM001', 3.05, 3, 60);
-INSERT INTO supplier_items VALUES ('SUP004', 'ITEM001', 3.40, 1, 40);
-INSERT INTO supplier_items VALUES ('SUP001', 'ITEM002', 1.30, 1, 80);
-INSERT INTO supplier_items VALUES ('SUP002', 'ITEM002', 1.22, 2, 100);
-INSERT INTO supplier_items VALUES ('SUP001', 'ITEM003', 1.10, 1, 60);
-INSERT INTO supplier_items VALUES ('SUP003', 'ITEM003', 1.02, 2, 80);
-INSERT INTO supplier_items VALUES ('SUP002', 'ITEM004', 0.95, 2, 120);
-INSERT INTO supplier_items VALUES ('SUP003', 'ITEM004', 0.90, 3, 150);
-INSERT INTO supplier_items VALUES ('SUP004', 'ITEM004', 1.00, 1, 100);
-INSERT INTO supplier_items VALUES ('SUP003', 'ITEM005', 4.70, 3, 50);
-INSERT INTO supplier_items VALUES ('SUP004', 'ITEM005', 4.90, 2, 40);
+-- Price (INR per policy unit), standard lead days and MOQ must match the
+-- unchanged SUP001-SUP004 policy PDFs. Validated before seed commit.
+INSERT INTO supplier_items VALUES ('SUP001', 'ITEM001', 900.00, 3, 100);
+INSERT INTO supplier_items VALUES ('SUP002', 'ITEM001', 850.00, 5, 200);
+INSERT INTO supplier_items VALUES ('SUP004', 'ITEM001', 875.00, 4, 150);
+INSERT INTO supplier_items VALUES ('SUP001', 'ITEM002', 450.00, 2, 100);
+INSERT INTO supplier_items VALUES ('SUP002', 'ITEM002', 425.00, 3, 150);
+INSERT INTO supplier_items VALUES ('SUP001', 'ITEM003', 300.00, 2, 100);
+INSERT INTO supplier_items VALUES ('SUP003', 'ITEM003', 275.00, 3, 150);
+INSERT INTO supplier_items VALUES ('SUP002', 'ITEM004', 700.00, 4, 100);
+INSERT INTO supplier_items VALUES ('SUP003', 'ITEM004', 680.00, 5, 200);
+INSERT INTO supplier_items VALUES ('SUP004', 'ITEM004', 690.00, 3, 150);
+INSERT INTO supplier_items VALUES ('SUP003', 'ITEM005', 550.00, 5, 100);
+INSERT INTO supplier_items VALUES ('SUP004', 'ITEM005', 525.00, 4, 150);
 
 INSERT INTO supplier_inventory (supplier_id, item_id, available_quantity) VALUES ('SUP001', 'ITEM001', 800);
 INSERT INTO supplier_inventory (supplier_id, item_id, available_quantity) VALUES ('SUP002', 'ITEM001', 650);

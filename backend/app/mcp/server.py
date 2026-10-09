@@ -25,6 +25,12 @@ async def ready(request):
     return Response(media_type="application/json")
 
 
+from app.oci.studio_notification_probe import install_mcp
+def _studio_notification_client():
+    from app.dependencies import get_container
+    return get_container().notifications
+install_mcp(mcp, _studio_notification_client)
+
 # Mounted by FastAPI so development bearer sessions and resource lifecycle are shared.
 mcp_http_app = mcp.http_app(path="/", stateless_http=True, json_response=True)
 

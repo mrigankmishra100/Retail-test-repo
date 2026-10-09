@@ -1,5 +1,27 @@
 # Retail Inventory Agent
 
+## Notification verification release — 2026-10-09
+
+The current [image manifest](docker-images/manifest.json) identifies the reviewed
+notification-check release. Four backend-service archives add only a no-send
+`GET /status/notifications` diagnostic and its entrypoint registration. The
+frontend and all original base layers are unchanged; original archives remain
+available for rollback. See [image release notes](docker-images/README.md).
+
+`database/seed.sql` now matches the original supplier policy documents' prices,
+lead times and minimum quantities. Use it for a new empty schema only; it is not
+a migration and must not be rerun over an existing populated deployment.
+
+Notifications still require runtime IAM, an active confirmed email subscription,
+and explicit approval/dispatch in the application. The diagnostic calls only
+GetTopic and ListSubscriptions; it never calls PublishMessage and cannot prove
+email delivery. Deployment Studio supplies the enabled flags and newly created
+topic through private Object Storage configuration, not baked image credentials.
+
+The paired dashboard recipe is `retail-v4-20261009.4`. An older dashboard will
+reject this manifest until updated; arbitrary replacement images are not trusted.
+Run offline diagnostic tests with `python tests/test_notification_probe.py`.
+
 ## Deployment_v4: local chat-first application
 
 This branch snapshots the working `chat-first-workspace` on 2026-10-05.

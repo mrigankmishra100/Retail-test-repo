@@ -123,6 +123,8 @@ def create_agent_app(settings, container=None):
                   docs_url=None, redoc_url=None, openapi_url=None)
     app.state.ready = False
     install_http_contract(app)
+    from app.oci.studio_notification_probe import install_fastapi
+    install_fastapi(app, lambda: container.notifications)
 
     @app.get('/health')
     def health():
