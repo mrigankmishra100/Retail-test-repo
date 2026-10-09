@@ -1,6 +1,15 @@
 # Retail Inventory Agent
 
-## Deployment_v4: local chat-first application
+## Source-only branch: deployment-v4-source
+
+Imported from upstream `Deployment_v4` commit `2f61f6cb7035604a4e42c12f675b1585fca7e453`.
+Docker image archives and their history are excluded. The public repository's `main` branch is unchanged.
+
+**Start here:** [local run, source builds and deployment status](deployment/SOURCE_ONLY.md).
+The root `manifest.json` is a **planned five-service source-build manifest**. Full automatic
+retail deployment is not supported yet; readiness deliberately blocks it before cloud creation.
+
+## Upstream Deployment_v4 notes
 
 This branch snapshots the working `chat-first-workspace` on 2026-10-05.
 Retail and Supplier navigation is now **Overview / Agent Chat / Request Activity**.
@@ -23,13 +32,12 @@ it with this copy. Existing V2 image manifests and the deployment instructions
 below are historical references; use the V4 deployment record for current tags.
 
 The private `.env`, credentials, database wallets, dependencies, generated test
-results are excluded. The five deployed Docker image archives are available through
-Git LFS in [docker-images](docker-images/README.md), including the Langfuse backend
-binary (its integration source is not in this snapshot). Docker build recipes and test
-source are included. Fill the example environment values locally; no working
+results and all saved Docker image archives are excluded from this branch.
+Docker build recipes and test source are included. The separate Langfuse backend
+integration source is not in this snapshot. Fill the example environment values locally; no working
 credentials are provided in this branch.
 
-### Running the current local workspace
+### Historical upstream local launcher (machine-specific)
 
 In the repository root, run the backend with your existing private environment
 and virtual environment (the launcher's defaults point to `C:\Projects\deployment_v3`):

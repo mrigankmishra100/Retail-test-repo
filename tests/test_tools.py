@@ -9,9 +9,17 @@ def test_mcp_tools_are_importable() -> None:
     assert callable(tools.send_supplier_response)
 
 
-def test_tools_use_offline_service_placeholders() -> None:
-    result = tools.get_inventory_risk(days=7)
-    assert result == {"horizon_days": 7, "items": [], "status": "placeholder"}
+def test_tools_reject_calls_without_a_transport_session(monkeypatch) -> None:
+    import pytest
+    from fastmcp.exceptions import ToolError
+    from app.services.sessions import SessionError
+
+    def missing_session():
+        raise SessionError("Bearer session required")
+
+    monkeypatch.setattr(tools, "get_session", missing_session)
+    with pytest.raises(ToolError, match="unauthorized"):
+        tools.get_inventory_risk(days=7)
 
 
 def test_fastmcp_server_initializes_without_oci_configuration() -> None:

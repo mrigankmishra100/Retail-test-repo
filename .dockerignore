@@ -30,3 +30,6 @@ tests
 database
 policies
 *.docx
+
+.validation
+docker-images

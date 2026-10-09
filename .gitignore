@@ -39,7 +39,11 @@ playwright-report/
 test-results/
 *.tar
 *.tar.gz
-!/docker-images/*.tar
+/docker-images/
 
 # IDE and operating system
 .DS_Store
+
+# Local build verification output
+.validation/
+*.egg-info/
