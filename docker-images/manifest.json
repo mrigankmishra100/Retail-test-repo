@@ -1,10 +1,9 @@
 {
-  "verified_active_on": "2026-10-06",
   "platform": "linux/amd64",
   "format": "docker save",
   "storage": "git-lfs",
   "registry_prefix": "hyd.ocir.io/ax4qsxvnsmtm/retail-inventory",
-  "total_bytes": 1398263808,
+  "total_bytes": 1398257152,
   "images": [
     {
       "component": "frontend",
@@ -16,40 +15,42 @@
     },
     {
       "component": "backend",
-      "tag": "langfuse-backend-20260922-v1",
-      "archive": "backend-langfuse-backend-20260922-v1.tar",
-      "bytes": 310073856,
-      "archive_sha256": "a6d991485c3a812f6eb0d8819c2bb09c0eb65e811f31c1c3b87d23b3e5e82f81",
-      "registry_digest": "sha256:e8988e50a4ccc73a5a28cb5bf95d4cb4b4b2beeb3088ca46b4147903da0397a9"
+      "tag": "langfuse-backend-20260922-v1-notification-checks-v1",
+      "archive": "backend-notification-checks-20261009.tar",
+      "bytes": 310067200,
+      "archive_sha256": "dfc8664b4a414a2151f07ea584d2e643a322ef741d62daa6b6b0287c366a3cc7",
+      "registry_digest": "sha256:d308094942828afa3b5283d26bea9a4bad7761617f3322d6ee1ab4bbaf0d00a1"
     },
     {
       "component": "retail-agent",
-      "tag": "deployment-v2-20260918",
-      "archive": "retail-agent-deployment-v2-20260918.tar",
+      "tag": "deployment-v2-20260918-notification-checks-v1",
+      "archive": "retail-agent-notification-checks-20261009.tar",
       "bytes": 307210240,
-      "archive_sha256": "a869a1111b21eff75d4e0bd4878d2f5b08b3813ce2439266441d2c48e948960e",
-      "registry_digest": "sha256:e840a1e6881ae54668c934f9020244a9f8d8244c387d8fab5893db2f2925052b"
+      "archive_sha256": "4b419c4c87d7ae681ec7ecc03f170a98e343769afb28d539b54703854a05de81",
+      "registry_digest": "sha256:4fe2970a9305870972aadc5a14b72d089ca435cc6eaa20ada5c110fb6cc6a405"
     },
     {
       "component": "supplier-agent",
-      "tag": "deployment-v2-20260918",
-      "archive": "supplier-agent-deployment-v2-20260918.tar",
+      "tag": "deployment-v2-20260918-notification-checks-v1",
+      "archive": "supplier-agent-notification-checks-20261009.tar",
       "bytes": 307210240,
-      "archive_sha256": "fb96434f836b41c027101e655a828165ff95e15e33d3da2a7c08a0b01eec88c7",
-      "registry_digest": "sha256:25e74152c985c006023ee8d231741a701db62ac9eeb93e75a480f990a7276235"
+      "archive_sha256": "f3fb5b7bc5c2ab95e73d8dc67eab5ddf7d80c23073c01a91907102e47afbaade",
+      "registry_digest": "sha256:1090ea1d0b1acac052ee52f7d0e8caec4a9c332195e72c58c2529b6d11d9dce1"
     },
     {
       "component": "mcp-server",
-      "tag": "deployment-v2-20260918",
-      "archive": "mcp-server-deployment-v2-20260918.tar",
+      "tag": "deployment-v2-20260918-notification-checks-v1",
+      "archive": "mcp-server-notification-checks-20261009.tar",
       "bytes": 307210240,
-      "archive_sha256": "583a8394c0bc163f9eb9f904d73e283fe6ad9ebc5378854812de808509396821",
-      "registry_digest": "sha256:5bd536005a839c3bcc2cfa5d7e2ab7eebe782ce70c5c236d8d02ea2737b061e3"
+      "archive_sha256": "d5b5c2a59ae5648f7df094b88b44046e8b9449397d65aa38204e7dd49f043d08",
+      "registry_digest": "sha256:dd78771540b32a5cfb00df099598f57259381cc49352725de75a65b191d06534"
     }
   ],
   "credential_scan": {
-    "unique_layers_scanned": 28,
-    "findings": [],
-    "scope": "known local secrets and credential file/private-key block indicators, including all saved layers; not a comprehensive audit"
-  }
+    "scope": "Original published base archives are hash-identical; new layers contain only the reviewed entrypoint and no-send diagnostic source. No private runtime configuration is packaged. Not a comprehensive vulnerability scan.",
+    "findings": []
+  },
+  "base_images_verified_active_on": "2026-10-06",
+  "archives_verified_on": "2026-10-09",
+  "release": "retail-v4-20261009.4"
 }
