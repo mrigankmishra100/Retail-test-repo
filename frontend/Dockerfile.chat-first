@@ -1,0 +1,22 @@
+# Rebuild React while preserving the deployed V2 frontend proxy/runtime.
+# Requires the existing local dependency-cache image; use frontend/Dockerfile
+# for a full online build on another machine.
+ARG UI_DEPENDENCY_IMAGE=retail-ui-source-check:deployment-v1
+FROM ${UI_DEPENDENCY_IMAGE} AS build
+WORKDIR /app
+COPY frontend/package*.json ./
+RUN npm ci --offline --no-audit --no-fund
+COPY frontend/src ./src
+COPY frontend/public ./public
+COPY frontend/index.html frontend/vite.config.js ./
+RUN npm run build
+
+FROM hyd.ocir.io/ax4qsxvnsmtm/retail-inventory/frontend@sha256:20e256d4d587b5e7545394c229d2a2bbe890c9cc184072455e0ed61c30a31161
+ARG RELEASE_TAG=deployment-v4-chat-first-20261005
+ARG SOURCE_REVISION
+LABEL org.opencontainers.image.version=${RELEASE_TAG} org.opencontainers.image.revision=${SOURCE_REVISION}
+ENV APP_RELEASE_TAG=${RELEASE_TAG}
+COPY --from=build --chown=appuser:appuser /app/dist /app/static
+USER appuser
+EXPOSE 8080
+CMD ["python", "-m", "uvicorn", "app.frontend:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]

@@ -1,0 +1,50 @@
+# Portable source build: no dependency on the author's private OCIR images.
+FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea AS client-download
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o APT::Update::Error-Mode=any -o Acquire::https::Timeout=30 update \
+    && apt-get install -y --no-install-recommends unzip ca-certificates && rm -rf /var/lib/apt/lists/*
+ADD --checksum=sha256:fce485361332927f8328ea4b68d98968c6b0ea124e62470de8c9d0cef880130e https://download.oracle.com/otn_software/linux/instantclient/2326300/instantclient-basic-linux.x64-23.26.3.0.0.zip /tmp/instantclient.zip
+RUN unzip -q /tmp/instantclient.zip -d /opt/oracle
+
+FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea AS runtime
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o APT::Update::Error-Mode=any -o Acquire::https::Timeout=30 update && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends libaio1t64 ca-certificates \
+    && ln -s /usr/lib/x86_64-linux-gnu/libaio.so.1t64 /usr/lib/x86_64-linux-gnu/libaio.so.1 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+COPY --from=client-download /opt/oracle /opt/oracle
+COPY backend/docker/oracle-instantclient.conf /etc/ld.so.conf.d/oracle-instantclient.conf
+RUN ldconfig
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
+    XDG_CACHE_HOME=/tmp/cache FASTMCP_HOME=/tmp/fastmcp APP_ENV=production \
+    OCI_AUTH_MODE=resource_principal HOSTED_PROBE_MODE=true ORACLE_DB_DRIVER_MODE=thick
+WORKDIR /app
+COPY backend/requirements.lock /app/requirements.lock
+RUN pip install -r requirements.lock
+COPY backend/app /app/app
+COPY backend/pyproject.toml /app/pyproject.toml
+RUN pip install --no-deps . && useradd --create-home --uid 10001 appuser \
+    && chown -R appuser:appuser /app \
+    && python -c "import oracledb; oracledb.init_oracle_client(); assert not oracledb.is_thin_mode()"
+ARG SOURCE_REVISION
+ARG RELEASE_TAG=source-build
+LABEL org.opencontainers.image.revision=${SOURCE_REVISION} org.opencontainers.image.version=${RELEASE_TAG}
+ENV APP_RELEASE_TAG=${RELEASE_TAG}
+USER appuser
+EXPOSE 8080
+
+FROM runtime AS backend
+ENV APPLICATION_ROLE=backend
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
+
+FROM runtime AS retail-agent
+ENV APPLICATION_ROLE=retail-agent
+CMD ["python", "-m", "uvicorn", "app.agent_main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
+
+FROM runtime AS supplier-agent
+ENV APPLICATION_ROLE=supplier-agent
+CMD ["python", "-m", "uvicorn", "app.agent_main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
+
+FROM runtime AS mcp-server
+ENV APPLICATION_ROLE=backend
+CMD ["python", "-m", "uvicorn", "app.mcp.server:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]

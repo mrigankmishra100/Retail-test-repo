@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "retail-inventory-agent"
+version = "0.1.0"
+description = "Agentic AI retail inventory replenishment proof of concept"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi", "uvicorn[standard]", "pydantic", "pydantic-settings", "httpx", "requests",
+  "langgraph==1.2.11", "langgraph-checkpoint==4.2.0", "langsmith", "fastmcp==4.0.3", "oci", "oracledb", "redis", "python-dotenv", "pypdf",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+tracing = ["langfuse==4.8.1"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["../tests"]

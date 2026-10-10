@@ -1,0 +1,26 @@
+# Package current code on the tested Oracle Thick runtime without reinstalling dependencies.
+# Override with a verified immutable registry digest for release reproducibility.
+ARG BACKEND_BASE_IMAGE=hyd.ocir.io/ax4qsxvnsmtm/retail-inventory/backend@sha256:7a12ab6e7c90fd029202bcc176232aca217d07396bba0cabc8f5e6a189294403
+FROM ${BACKEND_BASE_IMAGE} AS runtime
+ARG RELEASE_TAG=deployment-v2-20260918
+ARG SOURCE_REVISION=uncommitted
+LABEL org.opencontainers.image.version=${RELEASE_TAG} org.opencontainers.image.revision=${SOURCE_REVISION}
+ENV APP_RELEASE_TAG=${RELEASE_TAG}
+COPY --chown=appuser:appuser backend/app /app/app
+ENV APPLICATION_ROLE=backend
+USER appuser
+EXPOSE 8080
+
+FROM runtime AS backend
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log", "--log-level", "info"]
+
+FROM runtime AS retail-agent
+ENV APPLICATION_ROLE=retail-agent
+CMD ["python", "-m", "uvicorn", "app.agent_main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log", "--log-level", "info"]
+
+FROM runtime AS supplier-agent
+ENV APPLICATION_ROLE=supplier-agent
+CMD ["python", "-m", "uvicorn", "app.agent_main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log", "--log-level", "info"]
+
+FROM runtime AS mcp-server
+CMD ["python", "-m", "uvicorn", "app.mcp.server:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log", "--log-level", "info"]

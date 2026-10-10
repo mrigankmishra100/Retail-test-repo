@@ -1,0 +1,6 @@
+# Preserve the verified static frontend and dependency lock; update all Python code.
+FROM hyd.ocir.io/ax4qsxvnsmtm/retail-inventory/frontend@sha256:c77fff01c03cb24b48073b3982e188c2ab83a4d9475c3951077ce603cb30a2b9
+COPY --chown=appuser:appuser backend/app /app/app
+USER appuser
+EXPOSE 8080
+CMD ["python", "-m", "uvicorn", "app.frontend:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]

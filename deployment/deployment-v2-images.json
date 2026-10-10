@@ -1,0 +1,24 @@
+{
+  "release_tag": "deployment-v2-20260918",
+  "source_branch": "deployment_v2",
+  "image_source_revision": "ba4da521dba5b1da6a4331a99c1735aa20f9ea3a",
+  "registry_prefix": "hyd.ocir.io/ax4qsxvnsmtm/retail-inventory",
+  "status": "pushed_and_remote_manifests_verified_not_activated",
+  "platform": "linux/amd64",
+  "media_type": "application/vnd.docker.distribution.manifest.v2+json",
+  "images": {
+    "backend": "sha256:59c051a204172d6b257f14f8eb032ccc7ab4b06cc6da77d163f2c21cd3f46ab1",
+    "retail-agent": "sha256:e840a1e6881ae54668c934f9020244a9f8d8244c387d8fab5893db2f2925052b",
+    "supplier-agent": "sha256:25e74152c985c006023ee8d231741a701db62ac9eeb93e75a480f990a7276235",
+    "mcp-server": "sha256:5bd536005a839c3bcc2cfa5d7e2ab7eebe782ce70c5c236d8d02ea2737b061e3",
+    "frontend": "sha256:20e256d4d587b5e7545394c229d2a2bbe890c9cc184072455e0ed61c30a31161"
+  },
+  "verification": {
+    "offline_release_tests_passed": 22,
+    "mocked_browser_tests_passed": 6,
+    "application_images_smoke_checked": 5,
+    "python_source_files_matched_per_image": 83,
+    "full_legacy_pytest_suite_run": false,
+    "live_oracle_and_oci_end_to_end_run": false
+  }
+}

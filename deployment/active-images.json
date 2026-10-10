@@ -1,0 +1,14 @@
+{
+  "recorded_on": "2026-09-18",
+  "region": "ap-hyderabad-1",
+  "registry_prefix": "hyd.ocir.io/ax4qsxvnsmtm/retail-inventory",
+  "deployment_selection": "user-confirmed rollouts; registry digests verified; health checked separately",
+  "platform": "linux/amd64",
+  "images": {
+    "backend": {"tag": "resume-body-fix-20260917-v1", "digest": "sha256:43baa2f85ca30f88b7367d7ea9c6741f5acf5e0be4924073a9162cc7596b2c88"},
+    "retail-agent": {"tag": "mcp-json-fix-20260917-v1", "digest": "sha256:1784b809e69a04e825f362a924ab81e2cb4d84012e3c3e743d3de4dea4d21599"},
+    "supplier-agent": {"tag": "mcp-json-fix-20260917-v1", "digest": "sha256:14e3f8972423171dac3cd650af2e86fb31a67ea9bab1aba28522e7fd9e5652af"},
+    "mcp-server": {"tag": "mcp-json-fix-20260917-v1", "digest": "sha256:ee248aa8f76e1c991a8deae5e967abc6260145b05f05b23a0b1064025c20f0db"},
+    "frontend": {"tag": "mcp-json-fix-20260917-v1", "digest": "sha256:02642c916e7e164651341b4d526faf3f6950599f6fa3fd8a029910c91c531768"}
+  }
+}

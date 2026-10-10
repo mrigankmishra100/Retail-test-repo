@@ -1,0 +1,10 @@
+# Local-only browser verification image; never pushed as an application.
+FROM retail-inventory-ui-build:deployment-v2-20260918 AS ui
+FROM mcr.microsoft.com/playwright:v1.63.0-noble
+WORKDIR /app
+COPY --from=ui /app/node_modules ./node_modules
+COPY --from=ui /app/dist ./dist
+COPY frontend/tests/agent-registry.spec.js ./tests/
+COPY frontend/playwright.release.config.js ./
+COPY frontend/test-static-server.cjs ./
+CMD ["node", "node_modules/@playwright/test/cli.js", "test", "--config", "playwright.release.config.js"]

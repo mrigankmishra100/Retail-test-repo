@@ -1,0 +1,21 @@
+# Separate diagnostic variant; the normal backend Dockerfile stays Thin-mode.
+# Pin the already-tested baseline and the official native client archive.
+ARG BACKEND_BASE_IMAGE=hyd.ocir.io/ax4qsxvnsmtm/retail-inventory/backend@sha256:6b60e9289a028ddba539ae2c1a29a8927f582c633d41d58014326bd534d68f4a
+FROM ${BACKEND_BASE_IMAGE} AS client-download
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends unzip \
+    && rm -rf /var/lib/apt/lists/*
+ADD --checksum=sha256:fce485361332927f8328ea4b68d98968c6b0ea124e62470de8c9d0cef880130e https://download.oracle.com/otn_software/linux/instantclient/2326300/instantclient-basic-linux.x64-23.26.3.0.0.zip /tmp/instantclient.zip
+RUN unzip -q /tmp/instantclient.zip -d /opt/oracle
+
+FROM ${BACKEND_BASE_IMAGE}
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends libaio1t64 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* \
+    && ln -s /usr/lib/x86_64-linux-gnu/libaio.so.1t64 /usr/lib/x86_64-linux-gnu/libaio.so.1
+COPY --from=client-download /opt/oracle /opt/oracle
+COPY backend/docker/oracle-instantclient.conf /etc/ld.so.conf.d/oracle-instantclient.conf
+RUN ldconfig && python -c "import oracledb; oracledb.init_oracle_client(); assert not oracledb.is_thin_mode(); print(oracledb.clientversion())"
+COPY --chown=appuser:appuser backend/app /app/app
+ENV ORACLE_DB_DRIVER_MODE=thick
+USER appuser

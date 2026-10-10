@@ -1,0 +1,53 @@
+.registry-form {
+  padding: 20px;
+}
+.registry-form fieldset {
+  display: grid;
+  gap: 16px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.registry-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 18px;
+}
+.registry-form label {
+  align-items: stretch;
+  margin: 0;
+}
+.registry-form button {
+  justify-self: start;
+}
+.registry-help {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.registry-url {
+  min-width: 230px;
+  max-width: 440px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  font-size: 12px;
+}
+.registry-description {
+  min-width: 160px;
+  max-width: 300px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.registry-description small {
+  white-space: pre-wrap;
+}
+.registry-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 15px;
+  padding: 16px 20px;
+  font-size: 12px;
+}

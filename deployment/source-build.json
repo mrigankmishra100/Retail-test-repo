@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "application": "retail-inventory",
+  "platform": "linux/amd64",
+  "services": [
+    {"name": "mcp-server", "context": ".", "dockerfile": "backend/Dockerfile.source", "target": "mcp-server"},
+    {"name": "retail-agent", "context": ".", "dockerfile": "backend/Dockerfile.source", "target": "retail-agent"},
+    {"name": "supplier-agent", "context": ".", "dockerfile": "backend/Dockerfile.source", "target": "supplier-agent"},
+    {"name": "backend", "context": ".", "dockerfile": "backend/Dockerfile.source", "target": "backend"},
+    {"name": "frontend", "context": ".", "dockerfile": "frontend/Dockerfile", "target": null}
+  ]
+}
