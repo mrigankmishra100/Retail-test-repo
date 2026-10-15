@@ -2,7 +2,7 @@ import { useState } from 'react';
 import api from '../api';
 import EstimatedFinOps from './EstimatedFinOps';
 import { ErrorNotice, useResource } from '../ui';
-import { apiLabel } from './execution-labels';
+import { apiLabel, fileSearchLabel, controlDescription } from './execution-labels';
 
 const text = (value, fallback = '—') => typeof value === 'string' && value.length ? value :
   typeof value === 'number' && Number.isFinite(value) ? String(value) : fallback;
@@ -10,6 +10,9 @@ const label = (value) => text(value, 'unavailable').replaceAll('_', ' ');
 const isError = (event) => ['ERROR', 'CRITICAL'].includes(event.level) ||
   ['failed', 'blocked', 'error'].includes(event.status) || Number(event.http_status ?? event.status) >= 400;
 const eventName = (event) => event.stage === 'model_tool_request' ? `${apiLabel(event.api_source)} requested ${text(event.mcp_tool)}` :
+  event.stage === 'built_in_tool' ? fileSearchLabel(event.api_source) :
+  event.stage === 'mcp_safety' ? `Local MCP safety · ${text(event.mcp_tool)}` :
+  event.stage === 'mcp_result' ? `MCP result validation · ${text(event.mcp_tool)}` :
   event.mcp_tool ? `Tool · ${text(event.mcp_tool)}` : event.graph_node ? `Workflow · ${text(event.graph_node)}` :
     event.stage ? label(event.stage) : event.route ? `${text(event.method, 'HTTP')} ${event.route}` : event.event === 'request_completed' || event.logger === 'app.http' ? 'API request completed' : label(event.event || event.logger);
 const eventTime = (value) => value && !Number.isNaN(Date.parse(value)) ? new Date(value).toLocaleString() : '—';
@@ -63,6 +66,7 @@ export default function CloudOperations({ active, records, models }) {
         </tr>)}</tbody></table></div>}
       {!visible.length && !logs.loading && <p className="log-empty">{available ? events.length ? 'No events match these filters.' : 'No OCI events in this time range. Try a wider range or refresh after ingestion.' : logs.data?.message || 'OCI events are unavailable. Check the connection above.'}</p>}
       {selected && <div className="cloud-log-record"><div className="evaluation-subheading"><h4>Event details</h4><button onClick={() => setSelected(null)}>Close details</button></div>
+        {controlDescription(selected) && <p>{controlDescription(selected)}</p>}
         <dl>{Object.entries(selected).map(([key, value]) => <div key={key}><dt>{key.replaceAll('_', ' ')}</dt><dd>{text(value)}</dd></div>)}</dl>
       </div>}
     </section>

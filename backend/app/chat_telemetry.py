@@ -11,9 +11,9 @@ logger = logging.getLogger(__name__)
 
 
 def event(stage, status, *, tool=None, duration_ms=None, error_code=None, api_source=None):
-    if stage in {'agent_mapping', 'tool_transport', 'retrieval', 'built_in_tool', 'chat', 'registry', 'model_tool_request'}:
+    if stage in {'agent_mapping', 'tool_transport', 'retrieval', 'built_in_tool', 'chat', 'registry', 'model_tool_request', 'mcp_safety', 'mcp_result'}:
         from app.live_activity import activity_note
-        activity_note(stage, tool or stage, status, api_source=api_source)
+        activity_note(stage, tool or stage, status, api_source=api_source, error_code=error_code)
     trace = active_trace.get()
     if trace is not None:
         row = {'time': datetime.now(timezone.utc).isoformat(), 'stage': stage, 'status': status}
@@ -28,7 +28,7 @@ def event(stage, status, *, tool=None, duration_ms=None, error_code=None, api_so
         trace.events.append(row)
         logger.info('chat_execution_event', extra={'trace_id': trace.id, 'stage': stage,
             'status': status, 'mcp_tool': tool, 'duration_ms': duration_ms,
-            'model_id': trace.profile.model_id, 'api_source': api_source})
+            'model_id': trace.profile.model_id, 'api_source': api_source, 'error_code': error_code})
 
 
 def integer(value):
@@ -66,7 +66,7 @@ class ChatTrace:
             + cached*(p.cached_input_usd_per_million or 0) + written*(p.cache_write_usd_per_million or 0))/1_000_000
             + file_calls*(p.file_search_usd_per_call or 0), 8)
 
-    def record(self, result, elapsed, *, error=False):
+    def record(self, result, elapsed, *, error=False, api_source=None):
         usage = normalize_usage(result.get('usage'))
         builtins = result.get('builtin_tools', [])
         file_calls = sum(t.get('type') == 'file_search_call' for t in builtins)
@@ -79,7 +79,8 @@ class ChatTrace:
         self.citations.extend(result.get('citations', []))
         event('model', row['status'], duration_ms=elapsed)
         for tool in builtins:
-            event('built_in_tool', tool.get('status', 'unknown'), tool='file_search')
+            if tool.get('type') == 'file_search_call':
+                event('built_in_tool', tool.get('status', 'unknown'), tool='file_search', api_source=api_source)
 
     def finish(self, status, *, route='local', quality=None):
         sums = {}
@@ -110,6 +111,10 @@ class MeasuredResponses:
         return getattr(self.client, name)
 
     def create_response_sync(self, *args, **kwargs):
+        provider = getattr(self.client, 'provider', None)
+        source = {'gemini': 'gemini', 'openai': 'openai_responses', 'anthropic': 'anthropic'}.get(provider)
+        if source is None:
+            source = {'responses': 'oci_responses', 'native_chat': 'oci_chat'}.get(getattr(self.client, 'api_mode', None), 'model_api')
         started = monotonic()
         try:
             result = self.client.create_response_sync(*args, **kwargs)
@@ -117,13 +122,9 @@ class MeasuredResponses:
             # A provider may have returned usage before response validation failed.
             raw = {**getattr(exc, 'chat_result', {}), 'error_code': getattr(exc, 'public_code', 'model_request_failed'),
                    'http_status': getattr(exc, 'http_status', None)}
-            self.trace.record(raw, (monotonic()-started)*1000, error=True)
+            self.trace.record(raw, (monotonic()-started)*1000, error=True, api_source=source)
             raise
-        self.trace.record(result, (monotonic()-started)*1000)
-        provider = getattr(self.client, 'provider', None)
-        source = {'gemini': 'gemini', 'openai': 'openai_responses', 'anthropic': 'anthropic'}.get(provider)
-        if source is None:
-            source = {'responses': 'oci_responses', 'native_chat': 'oci_chat'}.get(getattr(self.client, 'api_mode', None), 'model_api')
+        self.trace.record(result, (monotonic()-started)*1000, api_source=source)
         # Record requests separately from executions. A requested tool can still
         # be rejected by argument validation, guardrails or permission checks.
         definitions = kwargs.get('tools', args[2] if len(args) > 2 else None) or []

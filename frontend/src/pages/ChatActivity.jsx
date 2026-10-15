@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { observeActivity, clearActivity } from '../activity-client';
 import './chat-activity.css';
-import { apiLabel } from './execution-labels';
+import { apiLabel, fileSearchLabel, controlDescription } from './execution-labels';
 
 const words = (value) => String(value ?? '').replaceAll('_', ' ');
 const timing = (ms) => `${(Math.max(0, ms || 0) / 1000).toFixed(1)} s`;
@@ -25,7 +25,9 @@ const titles = {
 function stepTitle(step) {
   if (step.stage === 'tool_validation') return `${step.name} · invalid arguments`;
   if (step.stage === 'model_tool_request') return `${apiLabel(step.api_source)} requested · ${step.name}`;
-  if (step.stage === 'built_in_tool') return `Built-in tool · ${step.name}`;
+  if (step.stage === 'built_in_tool') return fileSearchLabel(step.api_source);
+  if (step.stage === 'mcp_safety') return `Local MCP safety · ${step.name}`;
+  if (step.stage === 'mcp_result') return `MCP result validation · ${step.name}`;
   if (['tool', 'function_tool'].includes(step.stage)) return `Tool called · ${step.name}`;
   if (step.stage === 'agent_mapping') return `${words(step.name)} agent · ${words(step.status)}`;
   if (step.stage === 'tool_transport') return `Tool transport · ${words(step.status)}`;
@@ -71,7 +73,7 @@ function ActivityRun({ run, answerStatus, guardrailStatus }) {
       <ol>{steps.map((step) => <li key={step.id} className={`activity-step ${step.status}`}>
         <span className="activity-step-dot" aria-hidden="true" />
         <details><summary><span>{stepTitle(step)}</span>{!['agent_mapping', 'tool_transport', 'retrieval', 'chat', 'model_tool_request'].includes(step.stage) && <small>{step.status === 'running' && !running ? 'Outcome unreported' : words(step.status)}</small>}<time>{step.duration_ms != null ? timing(step.duration_ms) : ''}</time></summary>
-          <div><code>{step.name}</code><span>{words(step.stage)} · started +{timing(step.offset_ms)}</span>{step.stage === 'model_tool_request' && <span>The model requested this tool. The application checks permissions and arguments before executing it.</span>}{step.stage === 'built_in_tool' && <span>Reported by the provider after the model call; internal progress is unavailable.</span>}</div>
+          <div><code>{step.name}</code><span>{words(step.stage)} · started +{timing(step.offset_ms)}</span>{step.stage === 'model_tool_request' && <span>The model requested this tool. The application checks permissions and arguments before executing it.</span>}{controlDescription(step) && <span>{controlDescription(step)}</span>}</div>
         </details>
       </li>)}</ol>
       {run.truncated && <p>Showing the first 200 activity steps.</p>}

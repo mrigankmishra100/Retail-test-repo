@@ -14,13 +14,13 @@ export default function ExternalModelDialog({ onClose, onConnected, purpose = 'w
   const [models, setModels] = useState([]);
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   async function loadModels() {
-    setBusy(true); setError(null);
+    setBusy('catalog'); setError(null);
     try {
-      const result = await api.externalModelOptions({ provider: 'gemini', api_key: form.api_key });
+      const result = await api.externalModelOptions({ provider: form.provider, api_key: form.api_key });
       setModels(result.models);
       if (!result.models.includes(form.model_id)) update('model_id', '');
-      if (!result.models.length) setError({ message: 'No text-generation models were returned for this key.' });
-    } catch (e) { setError(e); setModels([]); }
+      if (!result.models.length) setError({ message: 'No available models were returned for this key.' });
+    } catch (e) { setError(e); setModels([]); update('model_id', ''); }
     finally { setBusy(false); }
   }
   async function connect(event) {
@@ -40,17 +40,17 @@ export default function ExternalModelDialog({ onClose, onConnected, purpose = 'w
         <label>Provider<select aria-label="Provider" value={form.provider} onChange={(event) => { setModels([]); setError(null); setForm({ provider: event.target.value, model_id: providers[event.target.value].model, api_key: '', max_tokens: 4096 }); }}>
           {Object.entries(providers).map(([id, provider]) => <option key={id} value={id}>{provider.name}</option>)}
         </select></label>
-        <label>API key<input required type="password" autoComplete="new-password" minLength={12} maxLength={512} value={form.api_key} onChange={(e) => { update('api_key', e.target.value); setModels([]); }} /></label>
+        <label>API key<input required type="password" autoComplete="new-password" minLength={12} maxLength={512} value={form.api_key} onChange={(e) => { setForm((current) => ({ ...current, api_key: e.target.value, model_id: models.length ? '' : current.model_id })); setModels([]); setError(null); }} /></label>
         <a href={providers[form.provider].keyUrl} target="_blank" rel="noreferrer">Get a {providers[form.provider].name} API key ↗</a>
-        {form.provider === 'gemini' && <div className="external-model-discovery"><button type="button" disabled={form.api_key.length < 12} onClick={loadModels}>Load available models</button><small>Checks this key's model catalog; quota and free-tier eligibility are separate.</small></div>}
+        <div className="external-model-discovery"><button type="button" disabled={form.api_key.length < 12} onClick={loadModels}>Load available models</button><small>Lists models returned for this key. Choose a model that supports function calling; quota, credits and free-tier eligibility are separate.</small></div>
         <label>Model ID{models.length > 0 ? <select aria-label="Model ID" required value={form.model_id} onChange={(e) => update('model_id', e.target.value)}>
           <option value="">Choose an available model</option>{models.map((id) => <option key={id} value={id}>{id}</option>)}
-        </select> : <input required maxLength={150} pattern="[A-Za-z0-9][A-Za-z0-9._-]*" value={form.model_id} onChange={(e) => update('model_id', e.target.value)} placeholder={form.provider === 'gemini' ? 'Load models above or enter an exact model ID' : "Your provider's function-calling model ID"} spellCheck="false" />}</label>
+        </select> : <input required maxLength={150} pattern="[A-Za-z0-9][A-Za-z0-9._:\-]*" value={form.model_id} onChange={(e) => update('model_id', e.target.value)} placeholder="Load models above or enter an exact model ID" spellCheck="false" />}</label>
         <details><summary>Output limit</summary><label>Maximum output tokens<input type="number" required min={256} max={16000} value={form.max_tokens} onChange={(e) => update('max_tokens', Number(e.target.value))} /></label></details>
       </fieldset>
       <small>Session only. Reconnect after a server restart. Policy tools remain available; OCI File Search is unavailable with external models.</small>
       <ErrorNotice error={error} />
-      <div className="external-model-actions"><button type="button" disabled={busy} onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? 'Connecting…' : purpose === 'comparison' ? 'Add to comparison' : 'Use model'}</button></div>
+      <div className="external-model-actions"><button type="button" disabled={busy} onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy === 'catalog' ? 'Loading models…' : busy ? 'Connecting…' : purpose === 'comparison' ? 'Add to comparison' : 'Use model'}</button></div>
     </form>
   </Dialog>;
 }

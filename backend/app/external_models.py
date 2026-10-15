@@ -14,7 +14,7 @@ PROVIDERS = {'gemini': 'Google Gemini', 'openai': 'OpenAI', 'anthropic': 'Anthro
 class ExternalModelInput(BaseModel):
     model_config = ConfigDict(extra='forbid', hide_input_in_errors=True)
     provider: Literal['gemini', 'openai', 'anthropic']
-    model_id: str = Field(min_length=1, max_length=150, pattern=r'^[A-Za-z0-9][A-Za-z0-9._-]*$')
+    model_id: str = Field(min_length=1, max_length=150, pattern=r'^[A-Za-z0-9][A-Za-z0-9._:-]*$')
     api_key: SecretStr = Field(repr=False)
     max_tokens: int = Field(default=4096, ge=256, le=16000)
 
@@ -37,8 +37,8 @@ class ExternalModelConnection(BaseModel):
 
 
 class ExternalModelDiscoveryInput(ExternalModelInput):
-    provider: Literal['gemini'] = 'gemini'
-    model_id: str = Field(default='catalog', pattern=r'^[A-Za-z0-9][A-Za-z0-9._-]*$')
+    provider: Literal['gemini', 'openai', 'anthropic'] = 'gemini'
+    model_id: str = Field(default='catalog', pattern=r'^[A-Za-z0-9][A-Za-z0-9._:-]*$')
 
 
 class ExternalModelOptions(BaseModel):

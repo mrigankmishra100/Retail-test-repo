@@ -17,7 +17,7 @@ export class ApiError extends Error {
 export async function request(path, { method = 'GET', body, key, activityOwnerId } = {}) {
   const requestToken = token;
   const activity = startActivity({ base: BASE, token: requestToken, path, method, activityOwnerId, isCurrentSession: () => token === requestToken });
-  let outcome = 'interrupted';
+  let outcome = 'interrupted', activityResponse;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 90000);
   try {
@@ -54,6 +54,7 @@ export async function request(path, { method = 'GET', body, key, activityOwnerId
       );
     }
     outcome = 'completed';
+    activityResponse = data;
     return data;
   } catch (error) {
     if (error instanceof ApiError) throw error;
@@ -65,7 +66,7 @@ export async function request(path, { method = 'GET', body, key, activityOwnerId
     );
   } finally {
     clearTimeout(timeout);
-    activity?.finish(outcome);
+    activity?.finish(outcome, activityResponse);
   }
 }
 const query = (params) =>

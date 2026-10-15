@@ -36,7 +36,7 @@ class ActivityStore:
                 'status': 'running', 'steps': [], 'truncated': False}
             return True
 
-    def step(self, identifier, stage, name, status='running', parent=None, api_source=None):
+    def step(self, identifier, stage, name, status='running', parent=None, api_source=None, error_code=None):
         with self.lock:
             row = self.rows.get(identifier)
             if row is None or row['status'] != 'running':
@@ -51,6 +51,8 @@ class ActivityStore:
                 'offset_ms': round((monotonic() - row['_started']) * 1000, 2)})
             if api_source:
                 row['steps'][-1]['api_source'] = api_source
+            if error_code:
+                row['steps'][-1]['error_code'] = error_code
             return step_id
 
     def end_step(self, identifier, step_id, status, elapsed):
@@ -128,10 +130,10 @@ def activity_step(stage, name):
     return decorate
 
 
-def activity_note(stage, name, status, *, api_source=None):
+def activity_note(stage, name, status, *, api_source=None, error_code=None):
     activity = active_activity.get()
     if activity and activity.bound:
-        store.step(activity.id, stage, name, status, parent=parent_step.get(), api_source=api_source)
+        store.step(activity.id, stage, name, status, parent=parent_step.get(), api_source=api_source, error_code=error_code)
 
 
 class ActivityMiddleware(BaseHTTPMiddleware):

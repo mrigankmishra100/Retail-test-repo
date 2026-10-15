@@ -319,6 +319,7 @@ def test_registry_readiness_checks_optional_table_index_and_sql(table_count, ind
         assert service._inspect_registry() == expected
     if expected == "ready":
         assert cursor.parse.call_count == 8
+        assert any('WHERE NOT EXISTS' in call.args[0] for call in cursor.parse.call_args_list)
     else:
         database._get_pool.assert_not_called()
 

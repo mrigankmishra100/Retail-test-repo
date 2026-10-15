@@ -94,7 +94,7 @@ class OfficialCosts:
 # Only operational scalar fields. No message text, prompts, tool arguments,
 # result payloads, SQL, exception text, session credentials or supplier identities.
 SAFE_FIELDS = ('trace_id', 'model_id', 'stage', 'status', 'mcp_tool', 'graph_node', 'agent',
-               'duration_ms', 'http_status', 'error_type', 'service', 'method', 'request_id', 'api_source', 'event', 'route')
+               'duration_ms', 'http_status', 'error_type', 'service', 'method', 'request_id', 'api_source', 'event', 'route', 'error_code')
 
 
 def safe_fields(data):
@@ -110,7 +110,7 @@ def metadata(record):
     result.update({key: getattr(record, key, None) for key in SAFE_FIELDS})
     # Only fixed event names, never formatted messages or request payloads.
     if record.msg in ('request_completed', 'chat_execution_event', 'retail_chat_tool_completed',
-                      'mcp_tool_failed', 'mcp_boundary_failed', 'mcp_boundary_completed',
+                      'mcp_control_check', 'mcp_tool_failed', 'mcp_boundary_failed', 'mcp_boundary_completed',
                       'mcp_remote_started', 'mcp_remote_completed', 'mcp_remote_failed', 'mcp_remote_stage'):
         result['event'] = record.msg
     return safe_fields(result)

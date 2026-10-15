@@ -41,6 +41,15 @@ def safe_error(exc, trace_id):
     return ToolError(f"{code}; trace_id={trace_id}. No approval is inferred; retain the same action key for retries.")
 
 
+def record_control(stage, status, tool, error_code=None):
+    """Fixed operational metadata only; no arguments, results or exception text."""
+    from app.chat_telemetry import event, active_trace
+    event(stage, status, tool=tool, api_source='local_mcp', error_code=error_code)
+    if active_trace.get() is None:
+        logger.info('mcp_control_check', extra={'stage': stage, 'status': status,
+            'mcp_tool': tool, 'api_source': 'local_mcp', 'error_code': error_code})
+
+
 def secured_tool(container_getter, session_getter):
     def decorate(fn):
         sig = signature(fn)
@@ -56,10 +65,13 @@ def secured_tool(container_getter, session_getter):
             session_token = context_token = None
             started, status = perf_counter(), "error"
             metadata = {"trace_id": trace_id}
+            check, denial = "session", None
             try:
                 session = CaseService._session(session_getter())
+                check = "arguments"
                 bound = sig.bind(*args, **kwargs)
                 values = inputs.model_validate(bound.arguments).model_dump()
+                check = "permissions"
                 if fn.__name__ in RETAIL_TOOLS and fn.__name__ not in SUPPLIER_TOOLS:
                     session.require_role("retail-manager")
                 elif fn.__name__ in SUPPLIER_TOOLS and fn.__name__ not in RETAIL_TOOLS:
@@ -72,6 +84,7 @@ def secured_tool(container_getter, session_getter):
                 session_token = tool_session.set(session)
                 context_token = tool_trace.set(trace)
                 metadata = trace.as_metadata()
+                check = "dependency"
                 container = container_getter()
                 context = trace.as_metadata()
                 with container.langfuse.observation(
@@ -79,20 +92,35 @@ def secured_tool(container_getter, session_getter):
                     metadata={"workflow": "mcp", "tool_name": fn.__name__}, context=trace,
                 ) as observation:
                     if fn.__name__ in CONTROLLED_TOOLS:
+                        check = "approval"
                         context.update(container.case_service.approval_context(
                             values["case_id"], session=session, tool_name=fn.__name__))
+                    check = "policy"
                     verdict = asyncio.run(container.mcp_safety.validate_tool_call(fn.__name__, context))
                     if verdict.get("allowed") is not True:
+                        denial = 'human_approval_required' if verdict.get('reason') == 'human_approval_required' else 'local_policy_denied'
                         raise PermissionError("Safety denied")
+                    record_control('mcp_safety', 'passed', fn.__name__)
+                    check = "execution"
                     result = fn(**values)
+                    check = "result"
                     try:
                         result = output.validate_python(result)
                     except Exception:
                         raise RuntimeError("Invalid service result") from None
+                    record_control('mcp_result', 'passed', fn.__name__)
                     observation.update(output=result, metadata={"status": "success"})
                 status = "ok"
                 return result
             except Exception as exc:
+                # A service outage is not a failed safety check. Output validation
+                # is recorded separately from the pre-execution permission gate.
+                if check not in {'execution', 'dependency'}:
+                    code = denial or {'session': 'session_required', 'arguments': 'invalid_arguments',
+                        'permissions': 'permission_denied', 'approval': 'approval_evidence_unavailable',
+                        'policy': 'policy_check_unavailable', 'result': 'invalid_tool_result'}[check]
+                    outcome = 'blocked' if isinstance(exc, (PermissionError, ValueError, TypeError)) and check != 'result' else 'failed'
+                    record_control('mcp_result' if check == 'result' else 'mcp_safety', outcome, fn.__name__, code)
                 logger.warning('mcp_tool_failed', extra={**metadata, 'mcp_tool': fn.__name__,
                     'error_type': type(exc).__name__, 'status': 'failed'}, exc_info=True)
                 raise safe_error(exc, trace_id) from None

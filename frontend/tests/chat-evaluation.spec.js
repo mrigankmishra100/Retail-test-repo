@@ -2,8 +2,9 @@ import { test, expect } from '@playwright/test';
 
 test('comparison connects an external model without changing the chat workflow or storing its key', async ({ page }, info) => {
   const state = await setup(page);
-  const profile = { id: 'external-compare', label: 'External Gemini', model_id: 'gemini-fixture', provider: 'gemini', file_search: false };
+  const profile = { id: 'external-compare', label: 'External OpenAI', model_id: 'gpt-fixture', provider: 'openai', file_search: false };
   let request;
+  await page.route('**/api/chat/external-model-options', (route) => route.fulfill({ json: { models: ['gpt-fixture'] } }));
   await page.route('**/api/chat/external-models', (route) => route.fulfill({ status: 201, json: { profile } }));
   await page.route('**/api/chat/evaluations', (route) => {
     request = route.request().postDataJSON();
@@ -15,11 +16,13 @@ test('comparison connects an external model without changing the chat workflow o
   await page.getByLabel('Add comparison model').selectOption('external');
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('same prompt and read-only tools');
+  await dialog.getByLabel('Provider', { exact: true }).selectOption('openai');
   await dialog.getByLabel('API key', { exact: true }).fill('comparison-fixture-secret');
-  await dialog.getByLabel('Model ID', { exact: true }).fill('gemini-fixture');
+  await dialog.getByRole('button', { name: 'Load available models' }).click();
+  await dialog.getByLabel('Model ID', { exact: true }).selectOption('gpt-fixture');
   await dialog.getByRole('button', { name: 'Add to comparison', exact: true }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(page.getByRole('checkbox', { name: 'External Gemini', exact: true })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'External OpenAI', exact: true })).toBeChecked();
   await expect(page.getByLabel('Built-in File Search / RAG', { exact: true })).toBeDisabled();
   await page.screenshot({ path: info.outputPath('external-comparison.png'), animations: 'disabled' });
   await page.getByRole('button', { name: 'Run comparison' }).click();
@@ -136,32 +139,42 @@ test('external model form fits mobile and failed setup preserves the selected mo
   await expect(page.getByLabel('Chat model')).toHaveValue('flash');
 });
 
-test('Gemini setup loads the key catalog and requires an explicit model choice', async ({ page }, info) => {
+for (const provider of ['gemini', 'openai', 'anthropic']) {
+test(`${provider} setup loads the key catalog and requires an explicit model choice`, async ({ page }, info) => {
   await setup(page);
   let discovery, configured;
   await page.route('**/api/chat/external-model-options', (route) => {
     discovery = route.request().postDataJSON();
-    return route.fulfill({ json: { models: ['gemini-available-flash', 'gemini-available-lite'] } });
+    return route.fulfill({ json: { models: [`${provider}-available-model`, `${provider}-another-model`] } });
   });
   await page.route('**/api/chat/external-models', (route) => {
     configured = route.request().postDataJSON();
-    return route.fulfill({ status: 201, json: { profile: { id: 'external-catalog-model', label: 'Available Gemini', model_id: configured.model_id, provider: 'gemini', file_search: false } } });
+    return route.fulfill({ status: 201, json: { profile: { id: 'external-catalog-model', label: `Available ${provider}`, model_id: configured.model_id, provider, file_search: false } } });
   });
   await page.getByLabel('Chat model').selectOption('__external__');
   const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Provider', { exact: true }).selectOption(provider);
   await expect(dialog.getByRole('button', { name: 'Load available models' })).toBeDisabled();
   await dialog.getByLabel('API key', { exact: true }).fill('fixture-catalog-key');
   await dialog.getByRole('button', { name: 'Load available models' }).click();
   await expect(dialog.getByRole('combobox', { name: 'Model ID', exact: true })).toHaveValue('');
-  expect(discovery).toEqual({ provider: 'gemini', api_key: 'fixture-catalog-key' });
+  expect(discovery).toEqual({ provider, api_key: 'fixture-catalog-key' });
   await expect(dialog).not.toContainText('gemini-2.5-flash');
-  await dialog.getByRole('combobox', { name: 'Model ID', exact: true }).selectOption('gemini-available-flash');
+  await dialog.getByRole('combobox', { name: 'Model ID', exact: true }).selectOption(`${provider}-available-model`);
+  await dialog.getByLabel('API key', { exact: true }).fill('fixture-replacement-key');
+  await expect(dialog.getByLabel('Model ID', { exact: true })).toHaveValue('');
+  await expect(dialog.getByRole('combobox', { name: 'Model ID', exact: true })).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Load available models' }).click();
+  expect(discovery).toEqual({ provider, api_key: 'fixture-replacement-key' });
+  await dialog.getByRole('combobox', { name: 'Model ID', exact: true }).selectOption(`${provider}-available-model`);
   await page.screenshot({ path: info.outputPath('available-models.png'), animations: 'disabled' });
   await dialog.getByRole('button', { name: 'Use model', exact: true }).click();
   await expect(page.getByLabel('Chat model')).toHaveValue('external-catalog-model');
-  expect(configured.model_id).toBe('gemini-available-flash');
+  expect(configured.model_id).toBe(`${provider}-available-model`);
   expect(await page.evaluate(() => JSON.stringify([localStorage, sessionStorage]))).not.toContain('fixture-catalog-key');
 });
+
+}
 
 test('legacy completed workflows with failed AI calls require attention and explain the 404', async ({ page }) => {
   await setup(page);
@@ -454,7 +467,7 @@ test('each answer owns its activity even when final telemetry arrives out of ord
   for (let index = 0; index < 2; index++) {
     expect(await answers.nth(index).evaluate((answer) => {
       const body = answer.querySelector('.message-body');
-      return Boolean(body.querySelector('.chat-activity').compareDocumentPosition(body.querySelector('.rendered-markdown')) & Node.DOCUMENT_POSITION_FOLLOWING);
+      return Boolean(body.querySelector('.rendered-markdown').compareDocumentPosition(body.querySelector('.chat-activity')) & Node.DOCUMENT_POSITION_FOLLOWING);
     })).toBe(true);
     await answers.nth(index).locator('.chat-activity-run > summary').click();
     await expect(answers.nth(index)).toContainText(`Tool for answer ${index + 1}`);
@@ -561,8 +574,10 @@ async function setup(page, { disabled = false } = {}) {
     cost_scope: 'Tokens and File Search; excludes infrastructure', price_version: 'Illustrative fixture rates only',
     events: [{ time: new Date().toISOString(), stage: 'agent_mapping', status: 'local', tool: 'retail' },
       { time: new Date().toISOString(), stage: 'model', status: 'completed', duration_ms: 300 },
+      { time: new Date().toISOString(), stage: 'mcp_safety', status: 'passed', tool: 'get_inventory_risk', api_source: 'local_mcp' },
+      { time: new Date().toISOString(), stage: 'mcp_result', status: 'passed', tool: 'get_inventory_risk', api_source: 'local_mcp' },
       { time: new Date().toISOString(), stage: 'function_tool', status: 'success', tool: 'get_inventory_risk', duration_ms: 125 },
-      { time: new Date().toISOString(), stage: 'built_in_tool', status: 'completed', tool: 'file_search' },
+      { time: new Date().toISOString(), stage: 'built_in_tool', status: 'completed', tool: 'file_search', api_source: 'oci_responses' },
       { time: new Date().toISOString(), stage: 'model', status: 'completed', duration_ms: 400 },
       { time: new Date().toISOString(), stage: 'chat', status: 'completed' }],
     quality: { tools_succeeded: true, human_rating: null, expected_terms: [{ term: 'coverage', found: true }] } });
@@ -655,6 +670,13 @@ test('comparison, execution map, rating and performance render together', async 
   await page.getByLabel('Built-in File Search / RAG').check();
   await page.getByRole('button', { name: 'Run comparison', exact: true }).click();
   await expect(page.locator('.comparison-card')).toHaveCount(2);
+  const flow = page.locator('.comparison-card').first().getByLabel('Recorded execution flow');
+  await expect(flow).toContainText('LOCAL MCP SAFETY');
+  await expect(flow).toContainText('MCP RESULT VALIDATION');
+  await expect(flow).toContainText('OCI Responses API · File Search');
+  const safetyStep = flow.locator('.flow-step').filter({hasText:'LOCAL MCP SAFETY'});
+  await safetyStep.getByText('Check details', {exact:true}).click();
+  await expect(safetyStep).toContainText('No hosted MCP Safety API was called');
   await expect(page.locator('.session-metrics-grid')).toContainText('Recorded tool calls');
   await expect(page.locator('.comparison-card').first()).toContainText('$0.00112');
   await expect(page.locator('.comparison-card').first()).toContainText('Estimated model cost');
@@ -723,7 +745,7 @@ test('complex prompt and recorded step review do not rerun models', async ({ pag
   await expect(page.getByLabel('Evaluation prompt')).toHaveValue(/identify missing information rather than inventing values/);
   await page.getByRole('button', { name: 'Run comparison', exact: true }).click();
   const card = page.locator('.comparison-card').first();
-  await expect(card.locator('.flow-step')).toHaveCount(5);
+  await expect(card.locator('.flow-step')).toHaveCount(7);
   await expect(card.locator('.flow-step').nth(1)).toContainText('get_inventory_risk');
   await card.getByRole('button', { name: 'Step through', exact: true }).click();
   await expect(card.locator('[aria-current="step"]')).toContainText('Model call 1');
@@ -852,7 +874,10 @@ test('live activity expands while chat is running and retains the completed step
     steps: [{id:'model', stage:'model', name:'Generating response', status:finished ? 'completed' : 'running', offset_ms:0, ...(finished ? {duration_ms:1100} : {})},
       {id:'db', stage:'database', name:'Reading Oracle data', status:'completed', offset_ms:2, duration_ms:25},
       {id:'request', stage:'model_tool_request', name:'get_supplier_policy', status:'requested', api_source:'oci_responses', offset_ms:3},
+      {id:'safety', stage:'mcp_safety', name:'get_supplier_policy', status:'passed', offset_ms:3},
       {id:'tool', stage:'tool', name:'get_supplier_policy', status:'completed', offset_ms:3, duration_ms:20},
+      {id:'output', stage:'mcp_result', name:'get_supplier_policy', status:'passed', offset_ms:4},
+      {id:'file', stage:'built_in_tool', name:'file_search', status:'completed', api_source:'oci_responses', offset_ms:5},
       {id:'transport', stage:'tool_transport', name:'tool transport', status:'local_functions', offset_ms:0}],
   }}));
   try {
@@ -864,7 +889,13 @@ test('live activity expands while chat is running and retains the completed step
     await expect(activity.locator(':scope > summary')).toContainText('Generating response');
     await activity.locator(':scope > summary').click();
     await expect(activity.locator('.activity-content')).toContainText('Reading Oracle data');
-    await expect(activity.locator('.activity-step > details > summary')).toContainText(['Generating response', 'Reading Oracle data', 'OCI Responses API requested · get_supplier_policy', 'Tool called · get_supplier_policy']);
+    await expect(activity.locator('.activity-step > details > summary')).toContainText(['Generating response', 'Reading Oracle data', 'OCI Responses API requested · get_supplier_policy', 'Local MCP safety · get_supplier_policy', 'Tool called · get_supplier_policy', 'MCP result validation · get_supplier_policy', 'OCI Responses API · File Search']);
+    const safety = activity.locator('.activity-step').filter({hasText:'Local MCP safety'});
+    await safety.locator('summary').click();
+    await expect(safety).toContainText('No hosted MCP Safety API was called');
+    const fileSearch = activity.locator('.activity-step').filter({hasText:'OCI Responses API · File Search'});
+    await fileSearch.locator('summary').click();
+    await expect(fileSearch).toContainText("does not pass through this application's MCP boundary");
     await expect(activity.locator(':scope > summary')).not.toContainText('Agent response');
     await expect(activity.locator('.activity-content')).not.toContainText('local functions');
     await expect(page.getByRole('log')).not.toContainText('Fixture answer');

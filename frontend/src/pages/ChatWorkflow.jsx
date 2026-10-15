@@ -54,7 +54,7 @@ function RetailStep({ record, session, disabled, onChange }) {
   </>;
 }
 
-export default function ChatRequest({ id, session, onChange, onMessage }) {
+export default function ChatRequest({ id, session, onChange }) {
   const resource = useResource(() => api.case(id), [id], 10000);
   const action = useAction();
   const [delivery, setDelivery] = useState('');
@@ -68,13 +68,12 @@ export default function ChatRequest({ id, session, onChange, onMessage }) {
     const result = await action.run('dispatch', () => api.dispatch(id, 'request'));
     if (result) {
       setDelivery(result.delivery_status || '');
-      onMessage?.('The notification service returned a result. The request status below shows the latest saved outcome.');
       changed();
     }
   }
   async function complete() {
     const result = await action.run(`complete:${id}`, (key) => api.complete(id, key));
-    if (result) { onMessage?.('The completed request summary has been saved.'); changed(); }
+    if (result) changed();
   }
   if (!c) return <WorkflowReply label="Request review in chat" step="Loading your request">
     {resource.loading && <Loading />}<ErrorNotice error={resource.error} retry={resource.reload} />

@@ -266,11 +266,12 @@ def test_gemini_model_discovery_filters_text_methods_and_handles_pagination():
     assert exc.value.public_code == 'external_model_method_unsupported'
 
 
-def test_model_options_endpoint_requires_owner_and_discovery_does_not_persist_key(container):
+@pytest.mark.parametrize('provider', ['gemini', 'openai', 'anthropic'])
+def test_model_options_endpoint_requires_owner_and_discovery_does_not_persist_key(container, provider):
     session = actor(); app = FastAPI(); app.include_router(router); install_http_contract(app)
     app.dependency_overrides[retail_session] = lambda: session
     with patch('app.chat_api.get_container', return_value=container), patch.object(ExternalModelClient, 'available_models', return_value=['gemini-current-flash']), TestClient(app) as api:
-        result = api.post('/chat/external-model-options', json={'provider':'gemini','api_key':KEY})
+        result = api.post('/chat/external-model-options', json={'provider':provider,'api_key':KEY})
         assert result.status_code == 200 and result.json() == {'models':['gemini-current-flash']}
         assert KEY not in result.text and not container.external_models.connections
     with patch('app.chat_api.get_container', return_value=container), patch.object(ExternalModelClient, 'validate_connection', side_effect=ExternalModelUnavailable('external_model_not_found', status=404)), TestClient(app) as api:
@@ -304,3 +305,80 @@ def test_workflow_metrics_distinguish_successful_graph_from_failed_ai(container)
     metrics = container.chat_experience_service.metrics(session=session)['records'][0]['metrics']
     assert metrics['workflow_status'] == 'completed'
     assert metrics['status'] == 'ai_unavailable'
+
+
+@pytest.mark.parametrize('provider,host,header', [
+    ('openai', 'api.openai.com', 'authorization'),
+    ('anthropic', 'api.anthropic.com', 'x-api-key'),
+])
+def test_provider_catalog_uses_authenticated_get_and_sorts_models(provider, host, header):
+    client = ExternalModelClient(config(provider))
+    requests = []
+    def reply(request):
+        requests.append(request)
+        assert request.method == 'GET' and request.url.host == host
+        assert request.url.path == '/v1/models' and request.content == b''
+        assert request.headers[header] == ('Bearer ' + KEY if provider == 'openai' else KEY)
+        assert KEY not in str(request.url)
+        if provider == 'anthropic':
+            assert request.headers['anthropic-version'] == '2023-06-01'
+            assert request.url.params['limit'] == '1000'
+            if len(requests) == 1:
+                return httpx.Response(200, json={'data': [{'id': 'z-model'}], 'has_more': True, 'last_id': 'z-model'})
+            assert request.url.params['after_id'] == 'z-model'
+        else:
+            assert not request.url.query
+        return httpx.Response(200, json={'data': [{'id': 'z-model'}, {'id': 'a-model'}, {'id': 'z-model'},
+            {'id': 'bad/path'}, {'id': None}, {'id': 123}, None, {'id': 'x' * 151},
+            {'id': 'retired-model', 'lifecycle': 'retired'}], 'has_more': False})
+    client.http_transport = httpx.MockTransport(reply)
+    assert client.available_models() == ['a-model', 'z-model']
+    assert len(requests) == (2 if provider == 'anthropic' else 1)
+
+
+def test_openai_catalog_and_connection_accept_fine_tuned_model_ids():
+    identifier = 'ft:gpt-test:organization:project:abc123'
+    client = ExternalModelClient(config('openai', model_id=identifier))
+    client._get = Mock(return_value={'data': [{'id': identifier}]})
+    assert client.available_models() == [identifier]
+
+
+@pytest.mark.parametrize('payload', [
+    {}, {'data': {}}, {'data': [], 'has_more': 'yes'},
+    {'data': [], 'has_more': True}, {'data': [], 'has_more': True, 'last_id': ''},
+    {'data': [], 'has_more': True, 'last_id': 123},
+    {'data': [], 'has_more': True, 'last_id': 'x' * 4097},
+])
+def test_anthropic_catalog_rejects_malformed_pagination(payload):
+    client = ExternalModelClient(config('anthropic'))
+    client._get = Mock(return_value=payload)
+    with pytest.raises(ExternalModelUnavailable) as exc:
+        client.available_models()
+    assert exc.value.public_code == 'external_response_invalid'
+
+
+def test_anthropic_catalog_bounds_repeated_and_excessive_pages():
+    client = ExternalModelClient(config('anthropic'))
+    client._get = Mock(return_value={'data': [], 'has_more': True, 'last_id': 'same-cursor'})
+    with pytest.raises(ExternalModelUnavailable) as exc: client.available_models()
+    assert exc.value.public_code == 'external_response_invalid' and client._get.call_count == 2
+    client._get = Mock(side_effect=[{'data': [], 'has_more': True, 'last_id': str(i)} for i in range(5)])
+    with pytest.raises(ExternalModelUnavailable) as exc: client.available_models()
+    assert exc.value.public_code == 'external_response_too_large' and client._get.call_count == 5
+
+
+@pytest.mark.parametrize('provider', ['openai', 'anthropic'])
+def test_provider_catalog_size_is_bounded(provider):
+    client = ExternalModelClient(config(provider))
+    client._get = Mock(return_value={'data': [{'id': f'model-{i}'} for i in range(1001)], 'has_more': False})
+    with pytest.raises(ExternalModelUnavailable) as exc: client.available_models()
+    assert exc.value.public_code == 'external_response_too_large'
+
+
+@pytest.mark.parametrize('provider', ['openai', 'anthropic'])
+@pytest.mark.parametrize('status,code', [(401, 'external_authentication_failed'), (429, 'external_rate_limit')])
+def test_provider_catalog_errors_never_expose_provider_body_or_key(provider, status, code):
+    client = ExternalModelClient(config(provider))
+    client.http_transport = httpx.MockTransport(lambda request: httpx.Response(status, json={'error': KEY}))
+    with pytest.raises(ExternalModelUnavailable) as exc: client.available_models()
+    assert exc.value.public_code == code and KEY not in str(exc.value)

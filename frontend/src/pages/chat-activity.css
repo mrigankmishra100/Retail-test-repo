@@ -18,9 +18,9 @@
 .activity-step { display: flex; align-items: start; gap: 10px; position: relative; padding: 0 0 12px; }
 .activity-step:not(:last-child)::before { content: ''; position: absolute; top: 12px; bottom: 0; left: 3px; border-left: 1px solid #e1ddd7; }
 .activity-step-dot { width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: #b7b4ad; flex-shrink: 0; }
-.activity-step.completed .activity-step-dot, .activity-step.success .activity-step-dot { background: #7d8a77; }
+.activity-step.passed .activity-step-dot, .activity-step.completed .activity-step-dot, .activity-step.success .activity-step-dot { background: #7d8a77; }
 .activity-step.running .activity-step-dot { background: #a55a3c; }
-.activity-step.failed .activity-step-dot { background: #b34339; }
+.activity-step.blocked .activity-step-dot, .activity-step.failed .activity-step-dot { background: #b34339; }
 .activity-step.waiting .activity-step-dot { background: #b5944e; }
 .activity-step > details { flex: 1; min-width: 0; }
 .activity-step summary { display: flex; gap: 8px; align-items: baseline; cursor: pointer; font-size: 11px; }
@@ -35,3 +35,12 @@
 @keyframes activity-enter { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 650px) { .chat-activity { margin-left: 0; } .activity-step summary { flex-wrap: wrap; } }
 @media (prefers-reduced-motion: reduce) { .chat-activity * { animation: none !important; transition: none !important; } }
+
+.workflow-history { min-width: 0; }
+.workflow-history h3 { margin: 6px 0 10px; font-size: 15px; }
+.workflow-history-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 12px 0 6px; }
+.workflow-history > small { color: #77716a; }
+.workflow-history > details { margin-top: 12px; }
+.workflow-history > details > summary { cursor: pointer; color: #914631; font-size: 13px; }
+.workflow-history pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.message-body > .chat-activity { margin-left: 0; }

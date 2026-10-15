@@ -287,3 +287,45 @@ that would require schema/API changes plus MCP client resolution and enforcement
 validation, credential handling and audit events. OCI Responses platform MCP calling is also
 separate from the current application-executed function calls; see the
 [OCI MCP Calling documentation](https://docs.oracle.com/en-us/iaas/Content/generative-ai/mcp.htm).
+
+
+## Demonstrating local MCP controls in traces
+
+New chat activity and execution traces show `Local MCP safety` before a local
+function executes and `MCP result validation` after its return schema passes.
+Expand the step for a fixed explanation. Blocked calls identify the failed check
+without exposing arguments, retrieved text, credentials or approval records.
+A business-service failure is not reported as a failed permission check.
+
+For a read-only UI demo, turn File Search off and ask:
+`Show items at risk and identify the supplier options for ITEM001.`
+Inspect the actual tool names and associated local MCP checks in the activity or
+Execution traces. The model chooses whether to call each tool; do not claim a
+tool ran unless its event exists. Use `scripts/demo_mcp_controls.py --verbose`
+for deterministic blocked-session, invalid-input, supplier-scope and approval
+scenarios using sample services; do not attempt a real send for a safety demo.
+
+With File Search enabled, a returned search event is labeled
+`OCI Responses API · File Search`. It is provider-executed, not routed through
+our MCP boundary. Chat-history function calls can still have their own MCP
+checks in the same request. OCI ApplyGuardrails injection checks are separate.
+This is local MCP validation/policy enforcement, not an implemented hosted
+Oracle MCP Safety API. Remote-server checks are logged on that server; this
+change does not invent or forward unseen remote checks into client activity.
+Older saved events without API attribution retain a generic provider label.
+
+### External provider model catalogs
+
+**Load available models** is available for Google Gemini, OpenAI and Anthropic in
+both agent chat and model comparison. The authenticated backend sends the key only
+to the selected provider's fixed API origin. OpenAI uses `GET /v1/models`; Anthropic
+uses `GET /v1/models` with bounded `after_id` pagination; Gemini retains its paginated
+text-generation catalog. Results are deduplicated, sorted and bounded to 1,000 IDs.
+No model is selected automatically. Changing a key clears its catalog selection;
+changing providers also clears the key. Manual model-ID entry remains available.
+
+Catalog lookup does not run inference or save a connection. A listing does not prove
+remaining quota, free credits, billing eligibility or function-tool compatibility.
+OpenAI's catalog includes models for other tasks, so select a Responses/function-
+calling model; Anthropic uses Messages/function calling. Provider errors are sanitized
+and credentials are never included in returned catalogs or saved browser storage.

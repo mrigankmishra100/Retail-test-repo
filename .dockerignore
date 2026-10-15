@@ -39,3 +39,9 @@ policies
 # Generated local V5 artifacts
 runtime/
 **/*.egg-info/
+
+# Source-build packaging exclusions
+docker-images/
+deployment/
+logs/
+test-results/

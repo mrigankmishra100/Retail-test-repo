@@ -126,6 +126,25 @@ test('retail: assessment, supplier selection, exact-draft approval and dispatch 
   expect(state.calls.filter((c) => c.path.includes('/dispatch/'))).toHaveLength(0);
   await dispatch.click();
   await expect(page.getByRole('region', { name: 'Request review in chat' })).toContainText('Awaiting supplier approval');
+  const selection = page.getByRole('region', { name: 'Supplier selected', exact: true });
+  const decision = page.getByRole('region', { name: 'Manager approval recorded', exact: true });
+  await expect(selection).toContainText('Fresh Supply');
+  await expect(selection).toContainText('100 units');
+  await expect(selection).toContainText('Awaiting manager approval');
+  await expect(decision).toContainText('Request queued');
+  await expect(page.getByRole('region', { name: 'Notification result', exact: true })).toContainText('Awaiting supplier approval');
+  await expect(page.locator('.workflow-history button')).toHaveCount(0);
+  await page.getByRole('region', { name: 'Assessment returned', exact: true }).getByText(/Supplier comparison/).click();
+  await expect(page.getByRole('region', { name: 'Assessment returned', exact: true })).toContainText('Fresh Supply');
+  // Each result owns its execution details below it, never a loose list below the current controls.
+  expect(await selection.evaluate((node) => node.nextElementSibling?.classList.contains('chat-activity'))).toBe(true);
+  expect(await decision.evaluate((node) => node.nextElementSibling?.classList.contains('chat-activity'))).toBe(true);
+  await page.screenshot({ path: info.outputPath('workflow-history.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  await decision.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: info.outputPath('workflow-history-mobile.png') });
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await expect(page.getByRole('heading', { name: 'Retail agent', exact: true })).toBeVisible();
   await page.reload();
   await page.getByRole('button', { name: 'Agent Chat', exact: true }).click();
@@ -147,6 +166,8 @@ test('supplier: checks, approval and response completion stay in chat', async ({
   await page.getByRole('button', { name: 'Send approved response & complete', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Approved request summary' }).first()).toBeVisible();
   expect(state.record.status).toBe('COMPLETED');
+  await expect(page.getByRole('region', { name: 'Supplier approval recorded', exact: true })).toContainText('Response queued');
+  await expect(page.locator('.workflow-history button')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Supplier agent', exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath('supplier-completed.png'), fullPage: true });
 });
@@ -177,6 +198,8 @@ test('conflict requires a fresh review', async ({ page }) => {
   await page.getByRole('button', { name: 'Approve draft', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Approve draft', exact: true })).toBeDisabled();
   await expect(page.getByRole('alert')).toContainText('conflict-trace');
+  await expect(page.getByRole('region', { name: 'Manager approval recorded', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('log')).toContainText('No successful decision or transition is confirmed');
 });
 
 test('assessment retry after refresh retains the idempotency key', async ({ page }) => {

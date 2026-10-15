@@ -83,7 +83,8 @@ class ExternalModelClient(EnterpriseAIResponsesClient):
                 raise ExternalModelUnavailable('external_model_method_unsupported')
 
     def available_models(self):
-        if self.provider != 'gemini': raise ValueError('Model discovery currently supports Gemini')
+        if self.provider != 'gemini':
+            return self._available_provider_models()
         models, token = set(), None
         for _ in range(5):
             params = {'pageSize': 1000, **({'pageToken': token} if token else {})}
@@ -91,13 +92,44 @@ class ExternalModelClient(EnterpriseAIResponsesClient):
             if not isinstance(data.get('models'), list): raise ExternalModelUnavailable('external_response_invalid')
             for row in data['models']:
                 name = row.get('name', '') if isinstance(row, dict) else ''
-                if (re.fullmatch(r'models/gemini-[A-Za-z0-9._-]{1,140}', name)
-                        and 'generateContent' in row.get('supportedGenerationMethods', [])
+                if (isinstance(name, str) and re.fullmatch(r'models/gemini-[A-Za-z0-9._-]{1,140}', name)
+                        and isinstance(row.get('supportedGenerationMethods'), list)
+                        and 'generateContent' in row['supportedGenerationMethods']
                         and not any(word in name.lower() for word in ('image', 'audio', 'tts', 'robotics', 'embedding'))):
                     models.add(name.removeprefix('models/'))
+            if len(models) > 1000: raise ExternalModelUnavailable('external_response_too_large')
             token = data.get('nextPageToken')
             if not token: return sorted(models)
             if not isinstance(token, str) or len(token) > 4096: raise ExternalModelUnavailable('external_response_invalid')
+        raise ExternalModelUnavailable('external_response_too_large')
+
+    def _available_provider_models(self):
+        # Catalog membership is not a quota, billing or function-calling guarantee.
+        models, cursor, seen = set(), None, set()
+        for _ in range(5):
+            params = ({'limit': 1000, **({'after_id': cursor} if cursor else {})}
+                      if self.provider == 'anthropic' else None)
+            data = self._get('/models', params)
+            if not isinstance(data.get('data'), list):
+                raise ExternalModelUnavailable('external_response_invalid')
+            for row in data['data']:
+                identifier = row.get('id') if isinstance(row, dict) else None
+                if (isinstance(identifier, str)
+                        and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:-]{0,149}', identifier)
+                        and row.get('lifecycle') != 'retired'):
+                    models.add(identifier)
+            if len(models) > 1000:
+                raise ExternalModelUnavailable('external_response_too_large')
+            if self.provider == 'openai':
+                return sorted(models)
+            if not isinstance(data.get('has_more'), bool):
+                raise ExternalModelUnavailable('external_response_invalid')
+            if not data['has_more']:
+                return sorted(models)
+            cursor = data.get('last_id')
+            if not isinstance(cursor, str) or not cursor or len(cursor) > 4096 or cursor in seen:
+                raise ExternalModelUnavailable('external_response_invalid')
+            seen.add(cursor)
         raise ExternalModelUnavailable('external_response_too_large')
 
     def create_response_sync(self, messages, conversation_id=None, tools=None, require_file_search=False):

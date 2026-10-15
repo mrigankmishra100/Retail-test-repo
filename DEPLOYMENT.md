@@ -1,5 +1,14 @@
 # V5 one-click deployment test
 
+Updated from V5 source commit `37ded66aa1274f26b177de9dcad6600133d88f1a`.
+Includes OpenAI/Anthropic/Gemini model catalogs, persistent in-chat workflow-step
+snapshots and MCP control events. Existing optional Langfuse tracing, portable
+source images and runtime registration are preserved. Reviewed dashboard commit:
+`eb4489372bd4f0c6839e12f0b36bd1cfe1589082` on `Deployment_optimized`.
+The current dashboard recipe explicitly disables OCI ApplyGuardrails and enables
+NL2SQL for Retail/MCP; adjust the deployment recipe if different flags are needed.
+Container builds and a live OCI deployment still need to be tested on the VM.
+
 Source: https://github.com/mrigankmishra100/Retail-test-repo/tree/V5-one-click-deployment
 
 Select **all five services** in Deployment Studio and use its source-build flow.

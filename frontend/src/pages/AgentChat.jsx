@@ -9,6 +9,8 @@ import Markdown from '../Markdown';
 import ExternalModelDialog from './ExternalModelDialog';
 import SecurityDecision from './SecurityDecision';
 import QueryDetails from './QueryDetails';
+import WorkflowHistory from './WorkflowHistory';
+import { nextTimelineOrder } from '../activity-client';
 
 // Only explicit UI actions call mutation endpoints. Model text never becomes an approval.
 export default function AgentChat({ session, thread, setThread, onChange, chatTarget, active, navigate }) {
@@ -49,7 +51,7 @@ export default function AgentChat({ session, thread, setThread, onChange, chatTa
 
   function say(message, role = 'assistant', extra = {}) {
     followReply.current = true;
-    setMessages((current) => [...current, { id: crypto.randomUUID(), role, message, ...extra }].slice(-60));
+    setMessages((current) => [...current, { id: crypto.randomUUID(), timeline_order: nextTimelineOrder(), role, message, ...extra }].slice(-60));
   }
   function openRequest(id) {
     setConversation(null);
@@ -176,9 +178,9 @@ export default function AgentChat({ session, thread, setThread, onChange, chatTa
     setView('workflow');
     if (result.case) openRequest(result.case.case_id);
     onChange();
-    say(result.message || 'The agent has updated your assessment.', 'assistant', { mode: result.mode });
   }
   async function start(event) {
+    say(itemId ? `Assess ${itemId}${quantity ? ` for ${quantity} units` : ' using the recommended quantity'}.` : 'Assess an at-risk item using the recommended quantity.', 'user');
     event.preventDefault();
     const body = { ...(modelProfile ? { model_profile: modelProfile } : {}), ...(itemId ? { item_id: itemId } : {}), ...(quantity ? { quantity: Number(quantity) } : {}) };
     // Preserve uncertain starts across refreshes. Reusing the same key recovers
@@ -194,14 +196,13 @@ export default function AgentChat({ session, thread, setThread, onChange, chatTa
       setSelected('');
       sessionStorage.removeItem(storageKey);
       setAssessment(false);
-      say(itemId ? `Assess ${itemId}${quantity ? ` for ${quantity} units` : ' using the recommended quantity'}.` : 'Assess an at-risk item using the recommended quantity.', 'user');
       updateWorkflow(result);
     }
   }
   async function select(quote) {
+    say(`Select ${quote.supplier_name || quote.supplier_id} for ${number(quote.quantity)} units.`, 'user');
     const result = await action.run(`select:${thread}:${quote.supplier_id}`, () => api.select(thread, { supplier_id: quote.supplier_id, quantity: quote.quantity }));
     if (result) {
-      say(`I selected ${quote.supplier_name || quote.supplier_id} for ${number(quote.quantity)} units.`, 'user');
       updateWorkflow(result);
     }
   }
@@ -209,6 +210,9 @@ export default function AgentChat({ session, thread, setThread, onChange, chatTa
     const result = await action.run(`resume:${thread}`, () => api.resume(thread));
     if (result) updateWorkflow(result);
   }
+  const transcriptEntries = [...messages, ...activityRuns.filter((run) => !run.client_message_id).map((run) => ({
+    id: run.id, timeline_order: run.timeline_order, role: 'assistant', workflowRun: run,
+  }))].sort((a, b) => a.timeline_order - b.timeline_order);
   return (
     <div className="chat-experience">
     <section className="agent-chat chat-panel" aria-label="Agent conversation">
@@ -260,16 +264,17 @@ export default function AgentChat({ session, thread, setThread, onChange, chatTa
           </div>
         </div>}
         <div role="log" aria-live="polite" aria-label="Conversation messages">
-          {messages.map((m) => <article className={`message ${m.role}`} key={m.id} id={`message-${m.id}`} data-message-id={m.id} tabIndex={-1}>
+          {transcriptEntries.map((m) => <article className={`message ${m.role}`} key={m.id} id={`message-${m.id}`} data-message-id={m.id} tabIndex={-1}>
             <div className="message-avatar"><Icon name={m.role === 'user' ? 'people' : 'bot'} size={17} /></div>
             <div className="message-body"><strong>{m.role === 'user' ? 'You' : retail ? 'Retail agent' : 'Supplier agent'}</strong>
-              {m.role === 'assistant' && <ChatActivity runs={activityRuns.filter((run) => run.client_message_id === m.id)} answerStatus={m.llm_status} guardrailStatus={m.guardrail_status} />}
+              {m.workflowRun && <WorkflowHistory run={m.workflowRun} />}
               {m.role === 'assistant' && <SecurityDecision details={m.security_details} status={m.guardrail_status} />}
               {m.message && (m.role === 'assistant' ? (!['BLOCKED', 'FAILED'].includes(m.guardrail_status) && <Markdown>{m.message}</Markdown>) : <p>{m.message}</p>)}
               {m.mode && !['BLOCKED', 'FAILED'].includes(m.guardrail_status) && <Badge>{['unavailable', 'disabled', 'limit_reached'].includes(m.llm_status) ? 'Answer unavailable' : m.mode === 'llm_read_only' ? 'Model-assisted answer' : 'Verified workflow facts'}</Badge>}
               {m.guardrail_status === 'PASSED' && <small className="security-indicator">Injection checks passed</small>}
               {m.metrics?.queries?.length > 0 && <QueryDetails queries={m.metrics.queries} />}
               {m.used_tools?.length > 0 && <small>Checked with: {m.used_tools.join(', ')}</small>}
+              {m.role === 'assistant' && <ChatActivity runs={m.workflowRun ? [m.workflowRun] : activityRuns.filter((run) => run.client_message_id === m.id)} answerStatus={m.llm_status} guardrailStatus={m.guardrail_status} />}
               {m.metrics && <details className="chat-answer-metrics"><summary>Response metrics & sources</summary><RunMetrics metrics={m.metrics} compact /></details>}
             </div>
           </article>)}
@@ -308,8 +313,8 @@ export default function AgentChat({ session, thread, setThread, onChange, chatTa
             onSelect={workflow.pending_input === 'selection' ? select : undefined} busy={action.busy || Boolean(checkpoint.error)} />}
           {workflow.can_resume && workflow.pending_input !== 'selection' && <button disabled={action.busy || Boolean(checkpoint.error) || workflow.status === 'delivery_reconciliation_required'} onClick={resume}>Continue assessment</button>}
         </WorkflowReply>}
-        {view === 'request' && selected && active && <ChatRequest key={selected} id={selected} session={session} onChange={onChange} onMessage={say} />}
-        <ChatActivity runs={activityRuns.filter((run) => !run.client_message_id).slice(-8)} />
+        {view === 'request' && selected && active && <ChatRequest key={selected} id={selected} session={session} onChange={onChange} />}
+
         <ErrorNotice error={action.error} />
         <div ref={end} />
       </div>

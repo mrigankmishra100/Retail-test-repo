@@ -3,7 +3,7 @@
   "release_kind": "source_only",
   "source_repository": "https://github.com/ORA-AIMLCOE/retail-inventory-agent",
   "source_branch": "V5",
-  "source_commit": "d8d38dc122cbab84b3bf29b3a0ee37513a688335",
+  "source_commit": "37ded66aa1274f26b177de9dcad6600133d88f1a",
   "destination_branch": "V5-one-click-deployment",
   "compatibility": [
     "Five-service source-build contract retained",
@@ -13,16 +13,16 @@
     "Registry enforcement enabled in gateway and agent source targets"
   ],
   "verification": {
-    "python_tests": 237,
+    "python_tests": 215,
     "python_subtests": 9,
-    "mocked_browser_tests": 57,
+    "mocked_browser_tests": 52,
     "frontend_source_build": "passed",
-    "npm_audit_findings": 0,
     "current_dashboard_manifest_and_five_runtime_configurations": "passed_offline",
     "registry_deactivation_and_reactivation": "passed_offline_for_retail_and_supplier",
     "image_builds": "not_run_docker_engine_unavailable",
     "container_smoke_checks": "not_run_docker_engine_unavailable",
     "oci_deployment": "not_run",
     "live_notification_publish": "not_tested"
-  }
+  },
+  "dashboard_commit": "eb4489372bd4f0c6839e12f0b36bd1cfe1589082"
 }

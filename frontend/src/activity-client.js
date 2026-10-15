@@ -1,7 +1,10 @@
+import { workflowSnapshot } from './workflow-history';
 // Optional metadata polling. Business requests are never retried by this observer.
 const listeners = new Set();
 const recent = new Map();
 let generation = 0;
+let timelineOrder = 0;
+export const nextTimelineOrder = () => ++timelineOrder;
 export const clearActivity = () => { recent.clear(); ++generation; };
 export function observeActivity(listener) {
   listeners.add(listener);
@@ -23,7 +26,7 @@ export function startActivity({ base, token, path, method, activityOwnerId, isCu
   const requestGeneration = generation;
   const isCurrent = () => requestGeneration === generation && isCurrentSession();
   let timer, finished = false, revision = 0;
-  let snapshot = { id, client_message_id: activityOwnerId, label: title(path), status: 'running', steps: [], elapsed_ms: 0, client_state: 'running' };
+  let snapshot = { id, timeline_order: nextTimelineOrder(), client_message_id: activityOwnerId, label: title(path), status: 'running', steps: [], elapsed_ms: 0, client_state: 'running' };
   const emit = () => {
     if (!isCurrent()) return;
     recent.set(id, { ...snapshot });
@@ -55,9 +58,9 @@ export function startActivity({ base, token, path, method, activityOwnerId, isCu
   timer = setTimeout(poll, 150);
   return {
     id,
-    finish(outcome) {
+    finish(outcome, response) {
       finished = true; clearTimeout(timer); ++revision;
-      snapshot = { ...snapshot, status: outcome, client_state: outcome,
+      snapshot = { ...snapshot, workflow_snapshot: outcome === 'completed' && !activityOwnerId ? workflowSnapshot(path, response) : null, status: outcome, client_state: outcome,
         duration_ms: performance.now() - started, elapsed_ms: performance.now() - started };
       emit();
       // A final read captures steps even when execution finished between polls.
