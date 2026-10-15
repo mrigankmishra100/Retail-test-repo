@@ -39,6 +39,8 @@ ENV APPLICATION_ROLE=backend AGENT_REGISTRY_ENFORCEMENT_ENABLED=true AGENT_REGIS
 CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
 
 FROM runtime AS retail-agent
+# Hyderabad deployment defaults; private CHAT_MODEL_PROFILES overrides this catalog.
+ENV CHAT_MODEL_PROFILES='[{"id":"baseline","label":"Gemini 2.5 Flash","model_id":"google.gemini-2.5-flash","file_search":true},{"id":"gpt-oss-120b","label":"GPT-OSS 120B","model_id":"openai.gpt-oss-120b","file_search":true}]'
 ENV APPLICATION_ROLE=retail-agent AGENT_REGISTRY_ENFORCEMENT_ENABLED=true
 CMD ["python", "-m", "uvicorn", "app.agent_main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
 
@@ -47,5 +49,7 @@ ENV APPLICATION_ROLE=supplier-agent AGENT_REGISTRY_ENFORCEMENT_ENABLED=true
 CMD ["python", "-m", "uvicorn", "app.agent_main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
 
 FROM runtime AS mcp-server
+# Hyderabad deployment defaults; private CHAT_MODEL_PROFILES overrides this catalog.
+ENV CHAT_MODEL_PROFILES='[{"id":"baseline","label":"Gemini 2.5 Flash","model_id":"google.gemini-2.5-flash","file_search":true},{"id":"gpt-oss-120b","label":"GPT-OSS 120B","model_id":"openai.gpt-oss-120b","file_search":true}]'
 ENV APPLICATION_ROLE=backend
 CMD ["python", "-m", "uvicorn", "app.mcp.server:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]

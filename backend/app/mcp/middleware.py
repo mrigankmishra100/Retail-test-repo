@@ -41,7 +41,8 @@ class ToolBoundaryMiddleware(Middleware):
                     tools.get_container().settings.remote_mcp_service_keys,
                     name, arguments, self.delegation_replay, include_model=True)
                 delegated_token = delegated_session.set(session)
-                if model_binding:
+                from app.mcp.model_binding import MODEL_BOUND_TOOLS
+                if model_binding and name in MODEL_BOUND_TOOLS:
                     from app.chat_models import profiles
                     from app.chat_telemetry import ChatTrace
                     from app.agents.tool_access import binding, RetailToolAccess

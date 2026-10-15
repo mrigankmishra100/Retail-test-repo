@@ -147,7 +147,8 @@ def call_remote(container, session, name, arguments):
         metadata['agent'] = role
         arguments = TOOL_FUNCTIONS[name].input_model.model_validate(arguments).model_dump(mode='json')
         selection = getattr(container, 'chat_selection', None)
-        model_binding = {k: selection[k] for k in ('profile', 'model_id')} if isinstance(selection, dict) else None
+        from app.mcp.model_binding import model_binding_for_tool
+        model_binding = model_binding_for_tool(name, selection)
         header = assertion(name, arguments, session, settings.remote_mcp_service_keys[role], model_binding)
         endpoint = validate_agent_endpoint(settings.remote_mcp_endpoint) + '/mcp'
         logger.info('mcp_remote_started', extra=metadata)

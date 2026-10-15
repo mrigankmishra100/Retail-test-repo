@@ -329,3 +329,21 @@ remaining quota, free credits, billing eligibility or function-tool compatibilit
 OpenAI's catalog includes models for other tasks, so select a Responses/function-
 calling model; Anthropic uses Messages/function calling. Provider errors are sanitized
 and credentials are never included in returned catalogs or saved browser storage.
+
+
+### Source deployment model catalog and remote MCP
+
+The source images for Retail and MCP include the Hyderabad demo catalog (Gemini
+2.5 Flash and GPT-OSS 120B). `CHAT_MODEL_PROFILES` in private runtime JSON overrides
+these defaults; set it explicitly for other regions or a different approved set.
+Keep the same profile IDs/model IDs on both workers. The `baseline` ID remains
+valid for existing sessions and workflows. Listing a model is configuration, not
+a guarantee of provider entitlement; File Search also requires a configured store.
+
+Remote MCP history, inventory, policy-document reads and deterministic workflow
+tools do not need the calling model on the MCP worker. They still verify the signed
+session, role, arguments, ownership, approvals and result schema. Only
+`prepare_workflow_case`, `search_policy_documents` and `query_retail_data` resolve
+a delegated model profile. Unknown profiles for those capabilities fail closed.
+The Retail graph generates external-model narratives/drafts on the Retail worker,
+where the session-owned key lives; keys are never added to MCP delegation headers.
