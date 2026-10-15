@@ -1,5 +1,6 @@
 """Deterministic retail LangGraph; only stored human decisions authorize dispatch."""
 from functools import wraps
+from app.live_activity import activity_step
 import logging
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import interrupt
@@ -24,6 +25,7 @@ def build_retail_graph(*, tools, cases, suppliers, checkpointer, conversation=No
     """Build with trusted per-invocation dependencies, never persisted bearer credentials."""
     def node(fn):
         @wraps(fn)
+        @activity_step('graph', 'retail.' + fn.__name__)
         def run(state):
             cases._session(tools.session).require_role("retail-manager")
             logger.info("Retail graph node=%s", fn.__name__, extra={"graph_node": fn.__name__,

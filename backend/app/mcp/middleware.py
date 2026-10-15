@@ -19,7 +19,7 @@ class ToolBoundaryMiddleware(Middleware):
     async def on_call_tool(self, context, call_next):
         trace_id = request_trace_id.get() or str(uuid4())
         token = request_trace_id.set(trace_id)
-        delegated_token = None
+        delegated_token = model_token = None
         started, stage, status = monotonic(), 'input_validation', 'failed'
         metadata = {'trace_id':trace_id, 'mcp_tool':'<unknown>'}
         try:
@@ -37,10 +37,20 @@ class ToolBoundaryMiddleware(Middleware):
                 stage = 'delegation_verification'
                 arguments = tools.TOOL_FUNCTIONS[name].input_model.model_validate(
                     context.message.arguments or {}).model_dump(mode='json')
-                session = verify_assertion(headers['x-mcp-assertion'],
+                session, model_binding = verify_assertion(headers['x-mcp-assertion'],
                     tools.get_container().settings.remote_mcp_service_keys,
-                    name, arguments, self.delegation_replay)
+                    name, arguments, self.delegation_replay, include_model=True)
                 delegated_token = delegated_session.set(session)
+                if model_binding:
+                    from app.chat_models import profiles
+                    from app.chat_telemetry import ChatTrace
+                    from app.agents.tool_access import binding, RetailToolAccess
+                    container = tools.get_container()
+                    profile = profiles(container.settings).get(model_binding['profile'])
+                    if profile is None or profile.model_id != model_binding['model_id']:
+                        raise ValueError('Selected model is not configured on this worker')
+                    scoped = container.chat_experience_service.scoped_container(profile, False, ChatTrace(profile), session)
+                    model_token = binding.set(RetailToolAccess(scoped, session))
                 # Correlation only, after verified delegation; never used as identity.
                 try:
                     metadata['call_id'] = str(UUID(headers.get('x-mcp-call-id','')))
@@ -61,4 +71,6 @@ class ToolBoundaryMiddleware(Middleware):
                 'duration_ms':round((monotonic()-started)*1000,2)})
             if delegated_token is not None:
                 delegated_session.reset(delegated_token)
+            if model_token is not None:
+                binding.reset(model_token)
             request_trace_id.reset(token)

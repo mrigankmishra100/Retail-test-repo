@@ -52,6 +52,8 @@ class HttpLoggingMiddleware:
         finally:
             self.logger.info("request_completed", extra={
                 **context, "status": status,
+                # Framework route template, not a caller-supplied path or query.
+                "route": getattr(scope.get('route'), 'path', None),
                 "duration_ms": round((perf_counter() - started) * 1000, 2),
             })
             request_trace_id.reset(trace_token)

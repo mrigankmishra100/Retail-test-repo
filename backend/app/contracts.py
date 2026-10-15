@@ -276,6 +276,8 @@ class PolicyResponse(BaseModel):
 class ChatRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     message: str = Field(min_length=1, max_length=4000)
+    model_profile: str | None = Field(default=None, pattern=r'^[a-zA-Z0-9_.-]{1,80}$')
+    use_file_search: bool | None = None
     intent: Literal["help", "inventory_risks", "supplier_quote", "case_status", "conversation"] = "help"
     conversation_id: UUID | None = None
     workflow_thread_id: UUID | None = None
@@ -299,7 +301,25 @@ class ChatRequest(BaseModel):
         return self
 
 
+class SecurityDecision(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    status: Literal['PASSED', 'BLOCKED', 'FAILED']
+    provider: Literal['oci', 'local', 'unknown']
+    reason_code: Literal['checks_passed', 'prompt_injection_detected', 'credential_material_detected',
+                         'security_check_unavailable', 'action_requires_approval', 'unverified_action_claim']
+    stage: Literal['input', 'history', 'tool_arguments', 'retrieval', 'output', 'action']
+    source: Literal['user', 'history', 'model', 'file_search', 'function_tool', 'workflow', 'application']
+    api_called: bool = False
+    event_id: UUID | None = None
+    prompt_injection_score: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
+    version: str | None = Field(default=None, pattern=r'^\d+\.\d+\.\d+$')
+    duration_ms: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    http_status: int | None = Field(default=None, ge=100, le=599)
+    request_id: str | None = Field(default=None, pattern=r'^[A-Za-z0-9/_-]{1,256}$')
+
+
 class ChatResponse(BaseModel):
+    metrics: dict | None = None
     mode: Literal["deterministic_read_only", "llm_read_only"] = "deterministic_read_only"
     message: str
     approval_recorded: Literal[False] = False
@@ -310,10 +330,12 @@ class ChatResponse(BaseModel):
     inventory: InventoryRiskReportResponse | None = None
     conversation_id: UUID | None = None
     workflow_thread_id: UUID | None = None
-    llm_status: Literal["disabled", "completed", "limit_reached", "blocked"] = "disabled"
+    llm_status: Literal["disabled", "completed", "limit_reached", "blocked", "unavailable"] = "disabled"
     used_tools: list[str] = Field(default_factory=list)
     response_route: Literal["LLM", "NL2SQL", "BLOCKED"] | None = None
     guardrail_status: Literal["PASSED", "BLOCKED", "FAILED", "NOT_APPLIED"] | None = None
+    security_event_id: UUID | None = None
+    security_details: SecurityDecision | None = None
 
 
 class ChatHistoryMessage(BaseModel):

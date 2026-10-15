@@ -1,5 +1,6 @@
 """Assigned supplier workflow; Oracle decisions, not resume text, authorize actions."""
 from functools import wraps
+from app.live_activity import activity_step
 import logging
 from fastmcp.exceptions import ToolError
 from langgraph.graph import StateGraph, START, END
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 def build_supplier_graph(*, tools, cases, checkpointer):
     def node(fn):
         @wraps(fn)
+        @activity_step('graph', 'supplier.' + fn.__name__)
         def run(state):
             cases._session(tools.session).require_role("supplier")
             cases.get_case(state["case_id"], session=tools.session)

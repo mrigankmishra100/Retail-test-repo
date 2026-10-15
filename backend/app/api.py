@@ -19,6 +19,10 @@ from app.contracts import SupplierEmailPreview, ApprovedMemoryPage
 from uuid import UUID
 
 router = APIRouter()
+from app.activity_api import router as activity_router
+router.include_router(activity_router)
+from app.chat_api import router as chat_metrics_router
+router.include_router(chat_metrics_router)
 router.include_router(session_router)
 router.include_router(case_router)
 router.include_router(retail_workflow_router)
@@ -58,7 +62,9 @@ def chat(request: ChatRequest, session: SessionContext = Depends(current_session
             or (request.session_id is not None and request.session_id != session.session_id)):
         raise HTTPException(403, "Chat identity must match the server session")
     if request.intent == "conversation":
-        return invoke(get_container().retail_conversation_service.respond, request, session=session)
+        return invoke(get_container().chat_experience_service.respond, request, session=session)
+    from app.services.agent_registry import enforce_agent
+    invoke(enforce_agent, get_container(), 'retail' if session.role == 'retail-manager' else 'supplier')
     return invoke(get_container().chat_service.respond, request, session=session)
 
 

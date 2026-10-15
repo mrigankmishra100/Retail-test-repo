@@ -53,8 +53,11 @@ class SupplierWorkflowService:
     def _config(thread_id):
         return {"configurable": {"thread_id": str(thread_id)}, "recursion_limit": 35}
 
-    @staticmethod
-    def _run(graph, command, config):
+    def _run(self, graph, command, config):
+        from app.services.agent_registry import enforce_agent
+        enforce_agent(self.container, 'supplier')
+        from app.live_activity import activity_note
+        activity_note('agent_mapping', 'supplier', 'local')
         with tracing_context(enabled=False):
             graph.invoke(command, config, durability="sync")
 
@@ -92,6 +95,8 @@ class SupplierWorkflowService:
 
     def _start(self, request, *, session, key):
         self._session(session)
+        from app.services.agent_registry import enforce_agent
+        enforce_agent(self.container, 'supplier')
         request = StartSupplierWorkflow.model_validate(request).model_dump(mode="json")
         CaseService._request(session, "supplier-workflow", request, key)
         # Validate visibility before creating any cache state.
@@ -143,6 +148,8 @@ class SupplierWorkflowService:
 
     def _resume(self, thread_id, *, session):
         self._session(session)
+        from app.services.agent_registry import enforce_agent
+        enforce_agent(self.container, 'supplier')
         with self.cache.workflow_lock(str(thread_id)):
             owner = self._owned(thread_id, session)
             graph, config = self._graph(session), self._config(thread_id)

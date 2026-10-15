@@ -41,7 +41,10 @@ def get_session_service() -> SessionService:
 def current_session(authorization: str | None = Header(default=None),
                     service: SessionService = Depends(get_session_service)) -> SessionContext:
     try:
-        return service.from_authorization(authorization)
+        session = service.from_authorization(authorization)
+        from app.live_activity import bind_session
+        bind_session(session)
+        return session
     except SessionError as exc:
         raise HTTPException(401, str(exc), headers={"WWW-Authenticate": "Bearer"}) from exc
     except CacheUnavailable as exc:

@@ -1,100 +1,106 @@
-# Current deployment
+# V5 one-click deployment test
 
-Use deployment/active-images.json as the release-selection manifest. It lists
-only the five selected tags/digests. Registry digests are immutable references;
-health checks alone cannot prove the exact digest running. Deployment selection
-also relies on the owner's reported rollouts.
+Source: https://github.com/mrigankmishra100/Retail-test-repo/tree/V5-one-click-deployment
 
-## Images and builds
+Select **all five services** in Deployment Studio and use its source-build flow.
+The manifest is `deployment/source-build.json`; backend services build from
+`backend/Dockerfile.source`, and the frontend from `frontend/Dockerfile`.
+Historical image manifests in this repository are not the release selection for
+this source branch. Do not select old image archives or the private-base Dockerfiles.
 
-Registry prefix: hyd.ocir.io/ax4qsxvnsmtm/retail-inventory.
+## Deployment and registration responsibilities
 
-| Application | Tag | Private config object |
+The dashboard creates resources and supplies private JSON configuration through
+the existing Object Storage bootstrap. It supplies the generated Retail and
+Supplier invoke URLs as `AGENT_ENDPOINTS` and their matching service keys as
+`AGENT_SERVICE_KEYS` to the gateway. Agents receive their individual key, remote
+MCP endpoint, MCP signing key and shared database configuration.
+
+This branch handles runtime registration and enforcement in application code:
+
+| Source image | Registry enforcement | Runtime registration |
 | --- | --- | --- |
-| backend | resume-body-fix-20260917-v1 | backend-v1.json |
-| retail-agent | mcp-json-fix-20260917-v1 | retail-agent-v1.json |
-| supplier-agent | mcp-json-fix-20260917-v1 | supplier-agent-v1.json |
-| mcp-server | mcp-json-fix-20260917-v1 | mcp-v1.json |
-| frontend | mcp-json-fix-20260917-v1 | None; console variables only |
+| backend | Enabled | Insert missing Retail/Supplier roles from `AGENT_ENDPOINTS` |
+| retail-agent | Enabled | Read shared registry before relevant execution |
+| supplier-agent | Enabled | Read shared registry before relevant execution |
+| mcp-server | Not the agent gate | Existing authenticated MCP controls |
+| frontend | API client | Registry page calls the gateway |
 
-For future builds choose a new tag; never overwrite a released tag:
+Image defaults are `AGENT_REGISTRY_ENFORCEMENT_ENABLED=true` in the gateway and
+both agents, and `AGENT_REGISTRY_BOOTSTRAP_ENABLED=true` in the gateway only.
+The current reviewed dashboard recipe omits these fields, so those defaults apply.
+Private JSON configuration overrides image defaults; a future dashboard must not
+set enforcement to false if deactivation is intended to block execution.
+`ENTERPRISE_AI_AGENT_REGISTRY_ENABLED` and `ENTERPRISE_AI_MCP_REGISTRY_ENABLED`
+are separate optional adapters and are not these application registry controls.
 
-```bash
-docker build --platform linux/amd64 --provenance=false --sbom=false --target backend -f backend/Dockerfile.split -t <backend-image:new-tag> .
-docker build --platform linux/amd64 --provenance=false --sbom=false --target retail-agent -f backend/Dockerfile.split -t <retail-image:new-tag> .
-docker build --platform linux/amd64 --provenance=false --sbom=false --target supplier-agent -f backend/Dockerfile.split -t <supplier-image:new-tag> .
-docker build --platform linux/amd64 --provenance=false --sbom=false --target mcp-server -f backend/Dockerfile.split -t <mcp-image:new-tag> .
-docker build --platform linux/amd64 --provenance=false --sbom=false -f frontend/Dockerfile -t <frontend-image:new-tag> .
+All three services must use the same database schema. The existing dashboard's
+bundled schema already contains `agent_registry` and `uq_registry_active_type`.
+On a fresh deployment, startup adds two active entries with the generated URLs.
+It does not call the agents or store service keys in the registry. Validation or
+database failures stop gateway startup rather than silently skipping registration.
+
+Bootstrap never updates, replaces or reactivates an existing role. On a reused
+database with old URLs, deactivate the old entry, register the new URL using the
+correct **Retail** or **Supplier** role, then activate the replacement. Only one
+entry per routed role may be active. A Custom entry is stored in the directory
+and does not control the Retail or Supplier workflow.
+
+## Registry demo
+
+1. Finish the dashboard deployment and open the frontend. Sign in as Retail manager.
+2. Open Agent registry. Confirm both generated URLs and active RETAIL/SUPPLIER entries.
+3. In Agent Chat, ask: **Can you show items at risk?** Confirm the normal response.
+4. Deactivate **Retail Agent**. Submit a new query. It must be blocked as inactive;
+   no new request should be forwarded to the Retail application. A model catalog
+   refresh can also show inactive while Retail is disabled.
+5. Activate Retail again and retry. The registry page remains available while an
+   agent is disabled. A gateway restart must not reactivate a disabled entry.
+6. For Supplier, open a supplier session and use an existing workflow/request.
+   With Supplier inactive, a new supplier workflow action must be blocked.
+   Activate it and retry. Do not send or approve real orders just to test this gate.
+
+Deactivation prevents new gated invocations; it does not undeploy the OCI service,
+cancel a request already running, remove historical messages, or disable the other
+role. Retail policy/inventory tools may still work when only Supplier is disabled:
+those tools do not necessarily invoke the Supplier agent. The demo proves an
+application registry gate, not an OCI platform-wide service shutdown.
+
+## Feature configuration and current limits
+
+- V5 source is present, but the dashboard recipe still selects its baseline model
+  and explicitly disables ApplyGuardrails. Enable guardrails in private runtime
+  configuration only with the required permissions and supported endpoint.
+- OCI logs require configured log/log-group IDs and IAM permissions. The viewer
+  does not provision a log destination. Estimated spend is not an OCI invoice.
+- External model keys are supplied at runtime through the UI, never at image build.
+  Regional evaluation is not offered through the remote Retail-agent route.
+- Chat metrics use writable `/tmp/chat-metrics.sqlite3` in these non-root images.
+  They are process-local and ephemeral. Sessions, temporary model connections and
+  live activity also need appropriate shared storage/routing for multi-replica
+  operation. This branch targets the current single-instance-per-service POC.
+- Runtime URLs and keys must match the newly deployed services. Registry entries
+  alone cannot make an unrelated application implement the signed agent contract.
+
+## Optional local source build and smoke check
+
+Use Docker with a running Linux engine. No cloud credentials are needed to build.
+From the checkout root in PowerShell:
+
+```powershell
+$revision = git rev-parse HEAD
+foreach ($service in @('mcp-server', 'retail-agent', 'supplier-agent', 'backend')) {
+    docker buildx build --platform linux/amd64 --load --provenance=false --file backend/Dockerfile.source --target $service --build-arg "SOURCE_REVISION=$revision" --tag "retail-v5-source-validation:$service" .
+    if ($LASTEXITCODE -ne 0) { throw "Build failed: $service" }
+}
+docker buildx build --platform linux/amd64 --load --provenance=false --file frontend/Dockerfile --build-arg "SOURCE_REVISION=$revision" --tag retail-v5-source-validation:frontend .
+if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed' }
+python scripts/smoke_source_images.py --prefix retail-v5-source-validation
 ```
 
-The split recipe retains a pinned private OCIR Oracle Thick runtime, so registry
-access is required to rebuild. backend/Dockerfile and Dockerfile.thick describe
-base/runtime construction, including the native client configuration. Historical
-base digests are build dependencies, not active deployment entries.
-
-frontend/Dockerfile builds the complete React app from source. Dockerfile.refresh
-is the packaging recipe used by the current release and reuses a pinned UI base.
-Images listen on 8080, run as appuser and require a single linux/amd64 manifest.
-Never embed local credentials, wallets or private configuration in an image.
-
-## Runtime configuration
-
-Use the five values in deployment/bootstrap.env.example for Backend, Retail,
-Supplier and MCP, selecting the matching object name. The current private bucket
-is retail-inventory-config-private, namespace ax4qsxvnsmtm. Do not also set
-APP_CONFIG_JSON. Restart/redeploy to load changed JSON; there is no live reload.
-
-Resource principals need access to their required config/wallet/policy objects
-and notification topics. The GenAI API key is a separate identity for Responses
-and vector access in Retail/MCP. Neither kind of credential belongs in Git.
-
-Private JSONs are excluded. scripts/prepare_runtime_configs.py prepares role
-files from private input; read --help first. It preserves supplied agent keys
-but generates new MCP delegation keys: do not blindly rerun it for existing
-deployments. Roll out matching role files together. Policy-vector ingestion is
-explicit, not an application startup step; do not blindly repeat ingestion.
-
-Frontend console variables:
-
-```dotenv
-APP_ENV=production
-LOG_LEVEL=INFO
-BACKEND_AUTH_MODE=none
-FRONTEND_ALLOW_ANONYMOUS=true
-BACKEND_API_CONTRACT=integrated
-BACKEND_INVOKE_BASE=https://inference.generativeai.ap-hyderabad-1.oci.oraclecloud.com/20251112/hostedApplications/<backend-application-ocid>/actions/invoke
-```
-
-The production label does not make anonymous access production-safe; this is a
-restricted-access POC. Do not include a literal <custom_path> in endpoint bases.
-
-## Behavior and rollout checks
-
-Retail uses Responses/Gemini 2.5 Flash and Conversations. Supplier is deterministic.
-Both agents use signed remote MCP delegation. JSON-only MCP POSTs avoid the
-malformed hosted SSE response observed in the previous transport. Resume APIs
-accept an omitted empty body, never approval fields. Dedicated decisions remain
-mandatory. Oracle DB stores approvals, cases, outbox state and approved summaries.
-
-Notifications use a shared POC topic; verify subscriptions before publishing.
-Native File Search/vector policy retrieval is configured. NL2SQL, managed
-registries and managed guardrails are disabled. Sessions/checkpoints/replay state
-are process-local; retain one process/replica and expect session loss on restart.
-
-GET /health and /ready checks startup. Backend GET /status/ready checks bounded
-dependencies without inference or publishing. Frontend GET /api/ready checks
-the backend proxy. These do not prove all workflows work end to end.
-
-Correlate logs by trace_id and MCP call_id. Inspect stage, protocol_error_code and
-response_validation_failed.validation_errors without recording values or keys.
-Do not reapprove queued cases. Explicit resume may publish; review state before
-retries and reconcile uncertain delivery.
-
-## Repository hygiene
-
-Runtime source, dependencies, build inputs, schema/migrations, sanitized examples,
-operational utilities and current deployment docs are included. Local test
-changes, diagnostic scripts, logs, audit manifests, historical release notes,
-private PDFs/configs and generated bundles are excluded. Previously tracked
-baseline tests remain unchanged. Tests are not prerequisites for frontend builds
-on this deployment branch.
+The smoke checker runs read-only containers with networking disabled, checks
+startup/health/readiness, the unsigned-agent boundary, no-send notification
+diagnostics, dependencies and Oracle Thick client loading. It does not prove
+live OCI permissions or connectivity. Builds need Docker Hub, Debian, PyPI, npm
+and Oracle download access. Supply credentials only through private runtime
+configuration; never through source files or build arguments.

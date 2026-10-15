@@ -34,11 +34,12 @@ CONTEXT_FIELDS = (
     "error_codes",
     "db_stage",
     "db_operation",
-    "stage", "source", "reason", "auth_mode", "http_status",
+    "stage", "source", "reason", "auth_mode", "http_status", "api_source", "route",
     "opc_request_id", "notification_id", "call_id", "setting_count",
     "not_delivered", "retryable",
     "protocol_error_code", "validation_errors", "error_count",
     "release_tag", "features",
+    "security_event_id", "security_provider", "security_categories", "guardrail_version",
 )
 
 

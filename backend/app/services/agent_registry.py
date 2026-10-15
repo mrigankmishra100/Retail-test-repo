@@ -3,7 +3,7 @@
 from datetime import datetime
 import logging
 from typing import Literal
-from uuid import UUID, uuid4
+from uuid import UUID, uuid4, uuid5, NAMESPACE_URL
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -51,6 +51,7 @@ class RegisteredAgent(AgentRegistration):
 class AgentPage(BaseModel):
     items: list[RegisteredAgent]
     has_more: bool
+    enforcement_enabled: bool = False
 
 
 class RegistryConflict(Exception):
@@ -66,8 +67,9 @@ def oracle_error_code(exc):
 
 
 class AgentRegistryService:
-    def __init__(self, database):
+    def __init__(self, database, *, enforcement_enabled=False):
         self.database = database
+        self.enforcement_enabled = enforcement_enabled
 
     @staticmethod
     def _agent(row):
@@ -77,7 +79,51 @@ class AgentRegistryService:
 
     def list_agents(self, *, limit=20, offset=0):
         rows = self.database.fetch_all("registry_agents", {"page_size": limit + 1, "offset": offset})
-        return AgentPage(items=[self._agent(row) for row in rows[:limit]], has_more=len(rows) > limit)
+        return AgentPage(items=[self._agent(row) for row in rows[:limit]], has_more=len(rows) > limit,
+                         enforcement_enabled=self.enforcement_enabled)
+
+    def bootstrap(self, endpoints):
+        """Insert missing routed roles from deployment configuration, never reactivate them."""
+        # Validate every supplied URL before writing either role. Keys remain in
+        # private runtime configuration and are never copied into the directory.
+        registrations = [AgentRegistration(
+            name=f"{role.title()} Agent", agent_type=role.upper(),
+            description="Registered from deployment runtime configuration",
+            endpoint_url=endpoints[role], active=True,
+        ) for role in ('retail', 'supplier') if role in endpoints]
+        for registration in registrations:
+            parameters = {**registration.model_dump(), 'active': 1,
+                'agent_id': str(uuid5(NAMESPACE_URL, 'retail-inventory/registry/' + registration.agent_type))}
+            try:
+                inserted = self.database.execute('registry_bootstrap_agent', parameters)
+            except Exception as exc:
+                # Two gateway replicas may bootstrap at once. Only a proven
+                # duplicate role is harmless; all other database failures stop startup.
+                if oracle_error_code(exc) != 1:
+                    raise
+                rows = self.database.fetch_all('registry_role_status', {'agent_type': registration.agent_type})
+                if len(rows) != 1 or int(rows[0]['registered_count']) < 1:
+                    raise
+                inserted = False
+            logger.info('agent_registry_bootstrap', extra={'agent': registration.agent_type.lower(),
+                'status': 'registered' if inserted else 'preserved'})
+
+    def require_enabled(self, audience):
+        if audience not in {'retail', 'supplier'}:
+            raise ValueError('Only Retail and Supplier agents may execute')
+        from app.chat_telemetry import event
+        try:
+            rows = self.database.fetch_all('registry_role_status', {'agent_type': audience.upper()})
+            if len(rows) != 1:
+                raise RuntimeError('Invalid registry state')
+            registered, active = int(rows[0]['registered_count']), int(rows[0]['active_count'])
+        except Exception:
+            event('registry', 'unavailable', tool=audience)
+            raise AgentUnavailable('Agent registry unavailable. Execution is paused until the registry can be checked.') from None
+        if registered and active != 1:
+            event('registry', 'disabled', tool=audience)
+            raise AgentUnavailable(f'{audience.title()} agent is inactive in Agent registry. Activate an entry of type {audience.upper()} before running it.')
+        event('registry', 'active' if registered else 'unregistered', tool=audience)
 
     def _get(self, agent_id):
         rows = self.database.fetch_all("registry_agent", {"agent_id": str(agent_id)})
@@ -131,3 +177,12 @@ class AgentRegistryService:
         endpoint = AgentRegistration.validate_url(rows[0]["endpoint_url"])
         logger.info('agent_registry_route', extra={'agent': audience, 'source': 'registry', 'status': 'resolved'})
         return endpoint
+
+
+class AgentUnavailable(PermissionError):
+    pass
+
+
+def enforce_agent(container, audience):
+    if getattr(container.settings, 'agent_registry_enforcement_enabled', False):
+        container.agent_registry_service.require_enabled(audience)

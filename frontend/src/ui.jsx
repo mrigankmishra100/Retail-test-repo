@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 export function Icon({ name = 'grid', size = 20, ...props }) {
   const paths = {
+    chart: <><path d="M4 3v17h17" /><path d="M8 16v-5m5 5V6m5 10V9" /></>,
     grid: (
       <>
         <rect x="3" y="3" width="7" height="7" rx="1" />

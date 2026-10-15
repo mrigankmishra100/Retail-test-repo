@@ -51,6 +51,9 @@ class NoRedirect(HTTPRedirectHandler):
 
 class OCIResponsesUnavailable(RuntimeError):
     """Safe public exception; provider payloads and credentials are not included."""
+    def __init__(self, message, *, code='provider_unavailable', http_status=None):
+        super().__init__(message)
+        self.public_code, self.http_status = code, http_status
 
 
 class OCIResponsesTransport:
@@ -129,7 +132,9 @@ class OCIResponsesTransport:
             error_type = type(exc).__name__
             status, request_id = exc.code, exc.headers.get("opc-request-id")
             exc.close()
-            raise OCIResponsesUnavailable("OCI Responses service unavailable") from None
+            code = {400: 'request_rejected', 401: 'authentication_failed', 403: 'access_denied',
+                    404: 'model_or_resource_unavailable', 429: 'rate_limited'}.get(status, 'provider_unavailable')
+            raise OCIResponsesUnavailable("OCI Responses service unavailable", code=code, http_status=status) from None
         except Exception as exc:
             error_type = type(exc).__name__
             raise OCIResponsesUnavailable("OCI Responses request failed") from None

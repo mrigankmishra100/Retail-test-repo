@@ -1,8 +1,10 @@
 import { resolveApiBase } from './api-base.js';
+import { startActivity, clearActivity } from './activity-client';
 
 const BASE = resolveApiBase(import.meta.url, import.meta.env.VITE_API_BASE_URL).replace(/\/$/, '');
 let token = null;
 export const setToken = (value) => {
+  if (token !== value) clearActivity();
   token = value;
 };
 export class ApiError extends Error {
@@ -12,7 +14,10 @@ export class ApiError extends Error {
     this.traceId = traceId;
   }
 }
-export async function request(path, { method = 'GET', body, key } = {}) {
+export async function request(path, { method = 'GET', body, key, activityOwnerId } = {}) {
+  const requestToken = token;
+  const activity = startActivity({ base: BASE, token: requestToken, path, method, activityOwnerId, isCurrentSession: () => token === requestToken });
+  let outcome = 'interrupted';
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 90000);
   try {
@@ -23,11 +28,13 @@ export async function request(path, { method = 'GET', body, key } = {}) {
         ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(key ? { 'Idempotency-Key': key } : {}),
+        ...(activity ? { 'X-Activity-ID': activity.id } : {}),
       },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
     const data = response.status === 204 ? null : await response.json().catch(() => null);
     if (!response.ok) {
+      outcome = 'failed';
       if (response.status === 401) window.dispatchEvent(new Event('session-expired'));
       const error = new ApiError(
         (response.status === 404 && path === '/sessions'
@@ -46,6 +53,7 @@ export async function request(path, { method = 'GET', body, key } = {}) {
         response.status,
       );
     }
+    outcome = 'completed';
     return data;
   } catch (error) {
     if (error instanceof ApiError) throw error;
@@ -57,11 +65,22 @@ export async function request(path, { method = 'GET', body, key } = {}) {
     );
   } finally {
     clearTimeout(timeout);
+    activity?.finish(outcome);
   }
 }
 const query = (params) =>
   new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined)).toString();
 export const api = {
+  officialCosts: () => request('/chat/official-costs'),
+  centralLogs: (hours = 1) => request(`/chat/central-logs${hours === 1 ? '' : `?hours=${hours}`}`),
+  agentRouting: () => request('/chat/routing'),
+  chatModels: () => request('/chat/models'),
+  connectExternalModel: (body) => request('/chat/external-models', { method: 'POST', body }),
+  externalModelOptions: (body) => request('/chat/external-model-options', { method: 'POST', body }),
+  chatMetrics: () => request('/chat/metrics'),
+  startChatEvaluation: (body) => request('/chat/evaluations', { method: 'POST', body }),
+  chatEvaluation: (id) => request(`/chat/evaluations/${id}`),
+  rateChatRun: (id, rating) => request(`/chat/runs/${id}/rating`, { method: 'POST', body: { rating } }),
   login: (body) => request('/sessions', { method: 'POST', body }),
   me: () => request('/sessions/me'),
   logout: () => request('/sessions/me', { method: 'DELETE' }),
@@ -87,6 +106,7 @@ export const api = {
   compare: (id, quantity, expedited = false) =>
     request(`/items/${id}/suppliers?${query({ quantity, expedited })}`),
   start: (body, key) => request('/retail/workflows', { method: 'POST', body, key }),
+  workflowModel: (id, model_profile) => request(`/retail/workflows/${id}/model`, { method: 'POST', body: { model_profile } }),
   workflow: (id) => request(`/retail/workflows/${id}`),
   select: (id, body) => request(`/retail/workflows/${id}/selection`, { method: 'POST', body }),
   resume: (id) => request(`/retail/workflows/${id}/resume`, { method: 'POST', body: {} }),
@@ -99,7 +119,7 @@ export const api = {
   prepare: (id, body, key) => request(`/cases/${id}/prepare`, { method: 'POST', body, key }),
   dispatch: (id, kind) => request(`/cases/${id}/dispatch/${kind}`, { method: 'POST' }),
   complete: (id, key) => request(`/cases/${id}/complete`, { method: 'POST', key }),
-  chat: (body) => request('/chat', { method: 'POST', body }),
+  chat: (body, activityOwnerId) => request('/chat', { method: 'POST', body, activityOwnerId }),
   supplierInventory: (id) => request(`/supplier/items/${id}/inventory`),
   supplierQuote: (id, quantity) => request(`/supplier/items/${id}/quote?${query({ quantity })}`),
   policy: () => request('/supplier/policy'),

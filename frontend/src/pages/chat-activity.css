@@ -1,0 +1,37 @@
+.chat-activity { margin: 16px 0 12px 44px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+.chat-activity-run { border-bottom: 1px solid #e8e5e0; font-size: 12px; }
+.chat-activity-run > summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 12px 0; cursor: pointer; color: #65615b; }
+.chat-activity-run > summary::-webkit-details-marker { display: none; }
+.chat-activity-run > summary:hover { color: #292722; }
+.activity-indicator { width: 7px; height: 7px; border-radius: 50%; background: #7d8a77; flex-shrink: 0; }
+.is-running .activity-indicator { background: transparent; border: 1.5px solid #aaa298; border-top-color: #914631; width: 10px; height: 10px; animation: activity-spin 650ms linear infinite; }
+.activity-indicator.has-error { background: #aa513b; }
+.activity-summary { display: grid; gap: 4px; min-width: 0; }
+.activity-summary > span { font-size: 10px; color: #77716a; }
+.activity-summary strong { font-weight: 500; font-size: 12px; overflow-wrap: anywhere; }
+.activity-step-count { font-size: 10px; margin-left: auto; white-space: nowrap; }
+.activity-chevron { transition: transform 120ms ease; }
+.chat-activity-run[open] > summary .activity-chevron { transform: rotate(90deg); }
+.activity-content { padding: 2px 8px 12px 18px; animation: activity-enter 120ms ease-out; }
+.activity-content > p { font-size: 10px; color: #77716a; margin: 0 0 12px; line-height: 1.5; }
+.activity-content ol { list-style: none; margin: 0; padding: 0; }
+.activity-step { display: flex; align-items: start; gap: 10px; position: relative; padding: 0 0 12px; }
+.activity-step:not(:last-child)::before { content: ''; position: absolute; top: 12px; bottom: 0; left: 3px; border-left: 1px solid #e1ddd7; }
+.activity-step-dot { width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: #b7b4ad; flex-shrink: 0; }
+.activity-step.completed .activity-step-dot, .activity-step.success .activity-step-dot { background: #7d8a77; }
+.activity-step.running .activity-step-dot { background: #a55a3c; }
+.activity-step.failed .activity-step-dot { background: #b34339; }
+.activity-step.waiting .activity-step-dot { background: #b5944e; }
+.activity-step > details { flex: 1; min-width: 0; }
+.activity-step summary { display: flex; gap: 8px; align-items: baseline; cursor: pointer; font-size: 11px; }
+.activity-step summary > span { overflow-wrap: anywhere; }
+.activity-step small { font-size: 9px; color: #827a71; }
+.activity-step time { margin-left: auto; white-space: nowrap; font-size: 10px; color: #77716a; font-variant-numeric: tabular-nums; }
+.activity-step details > div { display: grid; gap: 5px; padding: 7px 0 2px; color: #827a71; font-size: 10px; overflow-wrap: anywhere; }
+.activity-content .activity-footnote { margin: 8px 0 0; }
+.chat-answer-metrics { margin-top: 12px; }
+.chat-answer-metrics > summary { font-size: 11px; cursor: pointer; color: #77716a; }
+@keyframes activity-spin { to { transform: rotate(360deg); } }
+@keyframes activity-enter { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 650px) { .chat-activity { margin-left: 0; } .activity-step summary { flex-wrap: wrap; } }
+@media (prefers-reduced-motion: reduce) { .chat-activity * { animation: none !important; transition: none !important; } }

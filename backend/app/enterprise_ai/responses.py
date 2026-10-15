@@ -1,4 +1,5 @@
 """OCI Responses model adapter. No automatic native-Chat fallback."""
+from app.live_activity import activity_step
 
 import asyncio
 from collections.abc import Mapping, Sequence
@@ -110,10 +111,10 @@ class EnterpriseAIResponsesClient:
         return await asyncio.to_thread(self.create_response_sync, messages,
                                        conversation_id=conversation_id, tools=tools)
 
-    def create_response_sync(self, messages, conversation_id=None, tools=None):
+    def create_response_sync(self, messages, conversation_id=None, tools=None, require_file_search=False):
         """Synchronous boundary for sync LangGraph nodes; native OCI function calling."""
         if self.observability is None:
-            return self._create_response_sync(messages, conversation_id=conversation_id, tools=tools)
+            return self._create_response_sync(messages, conversation_id=conversation_id, tools=tools, require_file_search=require_file_search)
         from app.observability.context import TraceContext, request_trace_id
         with self.observability.observation(
             "oci.generative_ai.response",
@@ -125,7 +126,7 @@ class EnterpriseAIResponsesClient:
                                  agent="retail"),
             model=self.model_id,
         ) as observation:
-            result = self._create_response_sync(messages, conversation_id=conversation_id, tools=tools)
+            result = self._create_response_sync(messages, conversation_id=conversation_id, tools=tools, require_file_search=require_file_search)
             observation.update(
                 output={"status": result.get("status"), "output": result.get("output"),
                         "tool_calls": result.get("tool_calls") or []},
@@ -135,7 +136,7 @@ class EnterpriseAIResponsesClient:
             )
             return result
 
-    def _create_response_sync(self, messages, conversation_id=None, tools=None):
+    def _create_response_sync(self, messages, conversation_id=None, tools=None, require_file_search=False):
         """Execute one OCI model request; the public boundary adds optional tracing."""
         """Synchronous OCI Responses boundary for model calls and function tools."""
         if not self._is_configured:
@@ -155,7 +156,8 @@ class EnterpriseAIResponsesClient:
             raise ValueError("At least one chat message is required")
         if self.api_mode != 'responses':
             raise RuntimeError('Enabled AI requires OCI Responses API mode')
-        return self._create_responses_response(messages, conversation_id=conversation_id, tools=tools)
+        return self._create_responses_response(messages, conversation_id=conversation_id, tools=tools,
+                                               require_file_search=require_file_search)
 
     @property
     def _is_configured(self) -> bool:
@@ -168,7 +170,8 @@ class EnterpriseAIResponsesClient:
                  else self.auth_mode != 'api_key' or (self.config_file and self.config_profile))
         )
 
-    def _create_responses_response(self, messages, *, conversation_id=None, tools=None):
+    @activity_step('model', 'Generating response')
+    def _create_responses_response(self, messages, *, conversation_id=None, tools=None, require_file_search=False):
         """Translate server-built functions and explicitly configured policy File Search."""
         from app.enterprise_ai.responses_transport import conversation_path, OCIResponsesUnavailable
         items, instructions = [], []
@@ -181,7 +184,20 @@ class EnterpriseAIResponsesClient:
             elif role == 'assistant' and 'response_items' in message:
                 # Preserve reasoning/signature items for stateless continuations.
                 # This field is produced by this adapter, never accepted by /chat.
-                items.extend(message['response_items'])
+                for item in message['response_items']:
+                    # OCI GPT-OSS returns reasoning_text but rejects that output-only
+                    # content on a subsequent Responses input (and requires content
+                    # if the reasoning item is present). Replay function calls and
+                    # messages only for this family. Gemini signatures stay intact.
+                    if (self.model_id or '').startswith('openai.gpt-oss-'):
+                        if item.get('type') == 'reasoning':
+                            continue
+                        if item.get('type') == 'function_call':
+                            item = {key: item[key] for key in ('type', 'call_id', 'name', 'arguments')}
+                        elif item.get('type') == 'message':
+                            item = {'role': 'assistant', 'content': '\n'.join(
+                                part.get('text', part.get('refusal', '')) for part in item.get('content', []))}
+                    items.append(item)
             elif role in {'user', 'assistant'}:
                 if content:
                     items.append({'role': role, 'content': content})
@@ -205,14 +221,38 @@ class EnterpriseAIResponsesClient:
         if self.vector_store_ids:
             payload.setdefault('tools', []).append({'type': 'file_search',
                 'vector_store_ids': self.vector_store_ids, 'max_num_results': 5})
+            # Search completion metadata alone does not carry retrieved text into
+            # a later stateless model request. Ask OCI to return the evidence.
+            payload['include'] = ['file_search_call.results']
             payload['max_tool_calls'] = 8
+        if require_file_search:
+            if not self.vector_store_ids:
+                raise ValueError('Required File Search has no configured vector store')
+            payload['tool_choice'] = {'type': 'allowed_tools', 'mode': 'required',
+                                      'tools': [{'type': 'file_search'}]}
         response = self.transport.request('POST', '/responses', payload)
+        try:
+            result = self._parse_responses_result(response, conversation_id)
+            if require_file_search and not any(t.get('status') == 'completed' for t in result.get('builtin_tools', [])):
+                raise OCIResponsesUnavailable('Required native File Search was not executed', code='file_search_not_executed')
+            return result
+        except OCIResponsesUnavailable as exc:
+            exc.chat_result = {'usage': response.get('usage'), 'model_id': self.model_id,
+                'builtin_tools': [{'type': 'file_search_call', 'status': item.get('status', 'unknown')}
+                    for item in response.get('output', []) or []
+                    if isinstance(item, dict) and item.get('type') == 'file_search_call']}
+            raise
+
+    def _parse_responses_result(self, response, conversation_id):
+        from app.enterprise_ai.responses_transport import OCIResponsesUnavailable
         if response.get('status') != 'completed':
             raise OCIResponsesUnavailable('OCI response did not complete')
         output = response.get('output')
         if not isinstance(output, list):
             raise OCIResponsesUnavailable('Invalid OCI response output')
-        calls, text, ids = [], [], set()
+        calls, text, ids, builtins, citations = [], [], set(), [], []
+        evidence, seen_evidence, evidence_chars = [], set(), 0
+        evidence_omitted = False
         for item in output:
             if not isinstance(item, dict):
                 raise OCIResponsesUnavailable('Invalid OCI response item')
@@ -235,53 +275,42 @@ class EnterpriseAIResponsesClient:
                     if not isinstance(value, str):
                         raise OCIResponsesUnavailable('Unsupported OCI message content')
                     text.append(value)
+                    for annotation in part.get('annotations', []) or []:
+                        if isinstance(annotation, dict) and annotation.get('type') == 'file_citation':
+                            citations.append({key: annotation[key] for key in ('type', 'filename', 'file_id', 'index')
+                                              if key in annotation and isinstance(annotation[key], (str, int))})
             elif kind == 'file_search_call' and self.vector_store_ids:
+                builtins.append({'type': kind, 'status': item.get('status', 'unknown')})
                 if item.get('status') != 'completed':
-                    raise OCIResponsesUnavailable('Policy File Search did not complete')
+                    raise OCIResponsesUnavailable('Policy File Search did not complete', code='file_search_failed')
+                for match in item.get('results') or []:
+                    if not isinstance(match, dict) or not isinstance(match.get('text'), str) or not match['text'].strip():
+                        continue
+                    excerpt = {key: match[key] for key in ('file_id', 'filename', 'text')
+                               if isinstance(match.get(key), str)}
+                    identity = (excerpt.get('file_id'), excerpt.get('filename'), excerpt['text'])
+                    if identity in seen_evidence:
+                        continue
+                    seen_evidence.add(identity)
+                    size = sum(len(value) for value in excerpt.values())
+                    if evidence_chars + size > 20000 or len(evidence) >= 20:
+                        evidence_omitted = True
+                        continue
+                    evidence.append(excerpt)
+                    evidence_chars += size
             elif kind != 'reasoning':
                 raise OCIResponsesUnavailable('Unsupported OCI response item')
         return {'status': 'completed', 'output': '\n'.join(text) or None, 'tool_calls': calls,
-                'conversation_id': conversation_id, 'model_id': self.model_id,
-                'response_items': output, 'usage': self._extract_usage(response)}
+                'conversation_id': conversation_id, 'model_id': response.get('model') or self.model_id,
+                # Results are output-only evidence. Carry a bounded, normalized
+                # copy separately instead of replaying arbitrary provider metadata.
+                'response_items': [{k: v for k, v in item.items() if k != 'results'}
+                                   if item.get('type') == 'file_search_call' else item for item in output],
+                'retrieval_evidence': {'excerpts': evidence, 'omitted': evidence_omitted},
+                'usage': response.get('usage'),
+                'builtin_tools': builtins, 'citations': citations}
 
-    @staticmethod
-    def _extract_usage(response: Any) -> dict[str, int] | None:
-        """Normalize OCI Chat/Responses token usage for Langfuse generations."""
-        data = response.get("data") if isinstance(response, Mapping) else getattr(response, "data", None)
-        chat = data.get("chat_response") if isinstance(data, Mapping) else getattr(data, "chat_response", None)
-        candidates = [
-            response.get("usage") if isinstance(response, Mapping) else getattr(response, "usage", None),
-            data.get("usage") if isinstance(data, Mapping) else getattr(data, "usage", None),
-            chat.get("usage") if isinstance(chat, Mapping) else getattr(chat, "usage", None),
-        ]
-
-        def value(source: Any, *names: str) -> int | None:
-            for name in names:
-                raw = source.get(name) if isinstance(source, Mapping) else getattr(source, name, None)
-                if isinstance(raw, int) and raw >= 0:
-                    return raw
-            return None
-
-        for candidate in candidates:
-            if candidate is None:
-                continue
-            prompt = value(candidate, "prompt_tokens", "input_tokens")
-            completion = value(candidate, "completion_tokens", "output_tokens")
-            total = value(candidate, "total_tokens")
-            if prompt is None and completion is None and total is None:
-                continue
-            usage = {}
-            if prompt is not None:
-                usage["prompt_tokens"] = prompt
-            if completion is not None:
-                usage["completion_tokens"] = completion
-            if total is not None:
-                usage["total_tokens"] = total
-            elif prompt is not None and completion is not None:
-                usage["total_tokens"] = prompt + completion
-            return usage
-        return None
-
+    @activity_step('model', 'Generating response')
     def _create_chat_response(self, messages: Sequence[Mapping[str, Any]], *, tools=None) -> Any:
         """Delegate the OCI request to the shared Generative AI client."""
         logger.info("Calling the configured OCI Generative AI model")

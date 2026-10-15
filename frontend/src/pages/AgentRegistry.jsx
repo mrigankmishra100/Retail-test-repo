@@ -54,17 +54,9 @@ export default function AgentRegistry() {
 
   return (
     <div className="agent-registry">
-      <div className="callout info">
-        <Icon name="flow" />
-        <div>
-          Active Retail and Supplier entries select the destination for configured remote agents.
-          When no entry is active, the existing configured URL is used. Only one Retail and one
-          Supplier entry can be active. Custom agents are listed here only and are not invoked.
-        </div>
-      </div>
       {message && <div className="callout info" role="status">{message}</div>}
       <ErrorNotice error={registryError(action.error)} />
-      <Panel title="Register an agent" subtitle="Add a public OCI Hosted Application to the shared registry.">
+      <Panel title="Register an agent" className="registry-registration">
         <form className="registry-form" onSubmit={register}>
           <fieldset disabled={action.busy}>
             <legend className="sr-only">Agent details</legend>
@@ -81,11 +73,14 @@ export default function AgentRegistry() {
                   <option value="CUSTOM">Custom</option>
                 </select>
               </label>
+              <label>
+                Status
+                <select value={String(form.active)} onChange={(e) => update('active', e.target.value === 'true')}>
+                  <option value="false">Inactive</option>
+                  <option value="true">Active</option>
+                </select>
+              </label>
             </div>
-            <label>
-              Description
-              <textarea rows={2} maxLength={1000} value={form.description} onChange={(e) => update('description', e.target.value)} />
-            </label>
             <label>
               Public OCI Hosted Application URL
               <input
@@ -100,36 +95,34 @@ export default function AgentRegistry() {
               />
             </label>
             <p id="registry-url-help" className="registry-help">
-              Use the HTTPS invoke URL ending in /actions/invoke, without query parameters or an
-              extra path. Retail and Supplier agents must support the existing application contract
-              and service key for their role.
+              HTTPS invoke URL ending in /actions/invoke.
             </p>
-            <label>
-              Status
-              <select value={String(form.active)} onChange={(e) => update('active', e.target.value === 'true')}>
-                <option value="false">Inactive</option>
-                <option value="true">Active</option>
-              </select>
-            </label>
+            <details className="registry-optional"><summary>Add a description</summary>
+              <label>Description<textarea rows={2} maxLength={1000} value={form.description} onChange={(e) => update('description', e.target.value)} /></label>
+            </details>
             <button className="primary" disabled={action.busy || !form.name.trim()}>
               {action.busy ? 'Saving...' : 'Register agent'}
             </button>
           </fieldset>
         </form>
       </Panel>
-      <Panel title="Registered agents" subtitle="Shared by Retail managers and Suppliers."
+      <Panel title="Registered agents" className="registry-directory"
         action={<button disabled={agents.loading || action.busy} onClick={agents.reload}><Icon name="refresh" size={16} /> Refresh</button>}>
         <ErrorNotice error={registryError(agents.error)} retry={agents.reload} />
         {agents.loading ? <Loading label="Loading registered agents..." /> : agents.data?.items.length ? (
           <div className="table-scroll">
-            <table>
-              <thead><tr><th>Agent</th><th>Type</th><th>Hosted application URL</th><th>Status</th><th>Action</th></tr></thead>
+            <table><colgroup><col style={{width:'40%'}} /><col style={{width:'18%'}} /><col style={{width:'17%'}} /><col style={{width:'25%'}} /></colgroup>
+              <thead><tr><th>Agent</th><th>Type</th><th>Status</th><th>Action</th></tr></thead>
               <tbody>
                 {agents.data.items.map((agent) => (
                   <tr key={agent.agent_id}>
-                    <td className="registry-description"><strong>{agent.name}</strong><small>{agent.description || 'No description'}</small></td>
+                    <td className="registry-description"><strong>{agent.name}</strong>
+                      <details className="registry-agent-details"><summary aria-label={`Details for ${agent.name}`}>Details</summary>
+                        {agent.description && <p>{agent.description}</p>}
+                        <span>Hosted application URL</span><code>{agent.endpoint_url}</code>
+                      </details>
+                    </td>
                     <td><Badge>{agent.agent_type}</Badge>{agent.agent_type === 'CUSTOM' && <small>Stored only</small>}</td>
-                    <td className="registry-url">{agent.endpoint_url}</td>
                     <td><Badge tone={agent.active ? 'success' : 'neutral'}>{agent.active ? 'Active' : 'Inactive'}</Badge></td>
                     <td><button disabled={action.busy} onClick={() => toggle(agent)} aria-label={`${agent.active ? 'Deactivate' : 'Activate'} ${agent.name}`}>
                       {agent.active ? 'Deactivate' : 'Activate'}
@@ -148,6 +141,12 @@ export default function AgentRegistry() {
           </div>
         )}
       </Panel>
+      <details className="registry-guidance"><summary>Registration and routing</summary>
+        <p>{agents.data?.enforcement_enabled
+          ? 'Execution control is on: deactivating the last active Retail or Supplier entry blocks new executions for that role. Roles without entries use their existing configuration.'
+          : 'Execution control is off; inactive entries do not block local agents.'}</p>
+        <p>One active agent per Retail or Supplier role. Remote execution requires an authenticated worker using the application contract. Custom entries are directory only.</p>
+      </details>
     </div>
   );
 }

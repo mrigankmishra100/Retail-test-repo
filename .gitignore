@@ -49,3 +49,7 @@ test-artifacts/
 
 # IDE and operating system
 .DS_Store
+
+# Generated local V5 artifacts
+runtime/
+**/*.egg-info/

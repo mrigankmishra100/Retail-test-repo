@@ -5,6 +5,8 @@ import { Badge, ErrorNotice, Icon, Loading, useAction, useResource } from './ui'
 import { Overview } from './pages/Workspace';
 import AgentChat from './pages/AgentChat';
 import RequestActivity from './pages/RequestActivity';
+import EvaluationPage from './pages/EvaluationPage';
+import AgentRegistry from './pages/AgentRegistry';
 
 const SESSION = 'retail.session.v1';
 function readSession() {
@@ -199,8 +201,12 @@ export default function App() {
 }
 
 function Workspace({ session, onLogout }) {
-  const [page, setPage] = useState('overview'),
+  const permittedPage = () => modules.find((m) => m.id === window.location.hash.slice(1) && m.roles.includes(session.role))?.id || 'overview';
+  const [page, setPage] = useState(permittedPage),
     [menu, setMenu] = useState(false),
+    [collapsed, setCollapsed] = useState(() => {
+      try { return localStorage.getItem('retail.sidebar.collapsed') === 'true'; } catch { return false; }
+    }),
     [item, setItem] = useState(null),
     [chatTarget, setChatTarget] = useState(null),
     [thread, setThread] = useState(() =>
@@ -211,10 +217,29 @@ function Workspace({ session, onLogout }) {
   const health = useResource(api.health, []);
   const retail = session.role === 'retail-manager';
   const navigation = modules.filter((m) => m.roles.includes(session.role));
+  function toggleSidebar() {
+    setCollapsed((value) => {
+      try { localStorage.setItem('retail.sidebar.collapsed', String(!value)); } catch { /* Optional preference. */ }
+      return !value;
+    });
+  }
+  useEffect(() => {
+    if (!menu) return;
+    const close = (event) => { if (event.key === 'Escape') setMenu(false); };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [menu]);
+  useEffect(() => {
+    const restorePage = () => { setPage(permittedPage()); setMenu(false); };
+    window.addEventListener('hashchange', restorePage);
+    return () => window.removeEventListener('hashchange', restorePage);
+  }, [session.role]);
+  useEffect(() => { window.scrollTo(0, 0); }, [page]);
   function navigate(next, selectedItem) {
     const destination = ['cases', 'supplier-agent'].includes(next) ? 'activity'
       : ['workflows', 'inventory', 'supplier', 'suppliers', 'policy'].includes(next) ? 'assistant' : next;
     setPage(destination);
+    window.location.hash = destination;
     setMenu(false);
     if (selectedItem) setItem(selectedItem);
     if (destination === 'assistant' && selectedItem) {
@@ -247,6 +272,7 @@ function Workspace({ session, onLogout }) {
     policy: 'Supplier policy',
     assistant: retail ? 'Retail Agent Chat' : 'Supplier Agent Chat',
     activity: 'Request Activity',
+    evaluation: 'Evaluation & metrics',
     'agent-registry': 'Agent registry',
     platform: 'Platform & roadmap',
   };
@@ -262,11 +288,12 @@ function Workspace({ session, onLogout }) {
     policy: 'Your supplier policy, retrieved and verified by the backend.',
     assistant: 'Work with your agent, review its recommendations, and approve each decision here.',
     activity: 'Follow requests, supplier responses, and delivery outcomes in one place.',
+    evaluation: 'Understand performance. Compare models. Inspect every execution.',
     'agent-registry': 'Register hosted agents and manage their availability.',
     platform: 'Connected capabilities today. A foundation for what comes next.',
   };
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${page === 'assistant' ? 'chat-layout' : ''} ${['evaluation', 'activity', 'agent-registry'].includes(page) ? 'compact-pages' : ''} ${collapsed ? 'sidebar-collapsed' : ''}`}>
       <a className="skip-link" href="#main">
         Skip to content
       </a>
@@ -275,6 +302,7 @@ function Workspace({ session, onLogout }) {
           className="icon-button mobile-menu"
           aria-label="Toggle navigation"
           aria-expanded={menu}
+          aria-controls="workspace-sidebar"
           onClick={() => setMenu(!menu)}
         >
           <Icon name="menu" />
@@ -290,18 +318,25 @@ function Workspace({ session, onLogout }) {
           </div>
         </div>
       </header>
-      <aside className={`sidebar ${menu ? 'open' : ''}`}>
-        <div className="workspace-label">WORKSPACE</div>
-        <nav aria-label="Main navigation">
+      {menu && <button className="sidebar-backdrop" aria-label="Close navigation" onClick={() => setMenu(false)} />}
+      <aside id="workspace-sidebar" className={`sidebar ${menu ? 'open' : ''}`}>
+        <div className="sidebar-heading"><div className="workspace-label">WORKSPACE</div>
+          <button className="icon-button sidebar-toggle" aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!collapsed} aria-controls="workspace-navigation" onClick={toggleSidebar}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16" /></svg>
+          </button>
+        </div>
+        <nav id="workspace-navigation" aria-label="Main navigation">
           {navigation.map((m) => (
             <button
               key={m.id}
+              aria-label={m.label}
+              title={m.label}
               aria-current={page === m.id ? 'page' : undefined}
               className={page === m.id ? 'nav-item active' : 'nav-item'}
               onClick={() => navigate(m.id)}
             >
               <Icon name={m.icon} />
-              <span>{m.label}</span>
+              <span className="nav-label">{m.label}</span>
               {page === m.id && <span className="nav-indicator" />}
             </button>
           ))}
@@ -309,7 +344,7 @@ function Workspace({ session, onLogout }) {
         <div className="sidebar-bottom">
           <div className="connection">
             <span className={`dot ${health.data ? 'online' : ''}`} />
-            {health.loading ? 'Checking API…' : health.data ? 'API available' : 'API unavailable'}
+            <span className="connection-label">{health.loading ? 'Checking API…' : health.data ? 'API available' : 'API unavailable'}</span>
             <button
               className="icon-button"
               aria-label="Recheck API connection"
@@ -320,11 +355,13 @@ function Workspace({ session, onLogout }) {
           </div>
           <button
             className="nav-item"
+            aria-label="Sign out"
+            title="Sign out"
             disabled={logout.busy}
             onClick={() => logout.run('logout', onLogout)}
           >
             <Icon name="logout" />
-            <span>Sign out</span>
+            <span className="nav-label">Sign out</span>
           </button>
         </div>
       </aside>
@@ -341,13 +378,18 @@ function Workspace({ session, onLogout }) {
             <h1>{titles[page]}</h1>
             <p>{subtitles[page]}</p>
           </div>
+          {page === 'evaluation' && <button onClick={() => navigate('assistant')}>← Back to agent chat</button>}
         </div>
         <ErrorNotice error={logout.error} />
         {page === 'overview' && <Overview {...shared} />}
         {page === 'activity' && <RequestActivity {...shared} />}
-        <div hidden={page !== 'assistant'}>
+        {page === 'agent-registry' && <AgentRegistry />}
+        <div className="chat-page-slot" hidden={page !== 'assistant'}>
           <AgentChat {...shared} active={page === 'assistant'} />
         </div>
+        {retail && <div hidden={page !== 'evaluation'}>
+          <EvaluationPage session={session} active={page === 'evaluation'} navigate={navigate} />
+        </div>}
         <footer className="workspace-footer">
           <span>Retail Inventory Agent</span>
           <span>Human-led decisions. Agent-assisted operations.</span>

@@ -14,6 +14,13 @@ ROUTES = (
     ('POST', r'registry/agents', None, set()),
     ('POST', rf'registry/agents/{ID}/(activate|deactivate)', None, set()),
     ('POST', r'chat', None, set()),
+    ('GET', rf'activity/{ID}', None, set()),
+    ('GET', r'chat/(models|metrics|official-costs|routing)', None, set()),
+    ('GET', r'chat/central-logs', None, {'hours'}),
+    ('POST', r'chat/(external-models|external-model-options)', None, set()),
+    ('POST', r'chat/evaluations', None, set()),
+    ('GET', rf'chat/evaluations/{ID}', None, set()),
+    ('POST', rf'chat/runs/{ID}/rating', None, set()),
     ('GET', r'inventory/risks', None, {'horizon_days'}),
     ('GET', r'cases', None, {'limit', 'offset'}),
     ('GET', rf'cases/{ID}', None, set()),
@@ -29,6 +36,7 @@ ROUTES = (
     ('GET', rf'(retail|supplier)/workflows/{ID}', None, set()),
     ('POST', rf'(retail|supplier)/workflows/{ID}/resume', None, set()),
     ('POST', rf'retail/workflows/{ID}/selection', None, set()),
+    ('POST', rf'retail/workflows/{ID}/model', None, set()),
     ('GET', r'memory/approved', None, {'item_id', 'limit', 'offset'}),
 )
 
@@ -56,6 +64,9 @@ def session_headers(headers):
             raise HTTPException(401, 'Invalid application session')
         result['Authorization'] = authorization
     key = headers.get('idempotency-key')
+    activity_id = headers.get('x-activity-id')
+    if activity_id and re.fullmatch(r'[a-fA-F0-9-]{36}', activity_id):
+        result['X-Activity-ID'] = activity_id
     if key:
         if not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', key):
             raise HTTPException(400, 'Invalid idempotency key')

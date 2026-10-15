@@ -47,12 +47,21 @@ def build_configs(env, service_keys):
         'ENTERPRISE_AI_CONVERSATION_STATE_ENABLED': False,
         'ENTERPRISE_AI_FILE_SEARCH_ENABLED': False,
         'ENTERPRISE_AI_NL2SQL_ENABLED': False,
-        'ENTERPRISE_AI_GUARDRAILS_ENABLED': False,
+        'ENTERPRISE_AI_GUARDRAILS_ENABLED': env.get('ENTERPRISE_AI_GUARDRAILS_ENABLED', 'false').lower() == 'true',
+        'AGENT_REGISTRY_ENFORCEMENT_ENABLED': env.get('AGENT_REGISTRY_ENFORCEMENT_ENABLED', 'false').lower() == 'true',
         'ENTERPRISE_AI_MCP_SAFETY_ENABLED': False,
         'ENTERPRISE_AI_AGENT_REGISTRY_ENABLED': False,
         'ENTERPRISE_AI_MCP_REGISTRY_ENABLED': False,
         'LANGSMITH_TRACING': False,
     })
+    if common['ENTERPRISE_AI_GUARDRAILS_ENABLED']:
+        if not env.get('OCI_COMPARTMENT_ID'):
+            raise ValueError('Guardrails requires OCI_COMPARTMENT_ID')
+        common['OCI_COMPARTMENT_ID'] = env['OCI_COMPARTMENT_ID']
+        for name in ('ENTERPRISE_AI_GUARDRAILS_ENDPOINT', 'ENTERPRISE_AI_GUARDRAILS_VERSION',
+                     'ENTERPRISE_AI_GUARDRAILS_TIMEOUT_SECONDS'):
+            if env.get(name):
+                common[name] = env[name]
     ai = {
         'ENTERPRISE_AI_API_MODE': 'responses',
         'ENTERPRISE_AI_AUTH_MODE': 'genai_api_key',
@@ -64,6 +73,8 @@ def build_configs(env, service_keys):
         'ENTERPRISE_AI_FILE_SEARCH_ENABLED': True,
         'ENTERPRISE_AI_VECTOR_STORE_IDS': [VECTOR_STORE],
     }
+    if env.get('CHAT_MODEL_PROFILES'):
+        ai['CHAT_MODEL_PROFILES'] = json.loads(env['CHAT_MODEL_PROFILES'])
     configs = {'backend-v1.json': common | {
         'REMOTE_MCP_ENABLED': False,
         'AGENT_ENDPOINTS': {role: PREFIX+APP_IDS[role]+'/actions/invoke' for role in service_keys},

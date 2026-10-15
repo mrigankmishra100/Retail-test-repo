@@ -9,6 +9,7 @@ from app.contracts import (ItemId, SupplierId, CaseResponse, ComparisonResponse,
 class StartRetailWorkflow(BaseModel):
     model_config = ConfigDict(extra="forbid")
     item_id: ItemId | None = None
+    model_profile: str | None = Field(default=None, min_length=1, max_length=80)
     quantity: int | None = Field(default=None, strict=True, ge=1, le=1_000_000)
 
 
@@ -22,8 +23,15 @@ class ResumeRetailWorkflow(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class WorkflowModelSelection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    model_profile: str = Field(min_length=1, max_length=80)
+
+
 class RetailWorkflowResponse(BaseModel):
     thread_id: UUID
+    model_profile: str | None = None
+    model_id: str | None = None
     mode: Literal["deterministic_retail_graph"] = "deterministic_retail_graph"
     status: Literal["starting", "assessed", "awaiting_selection", "selected", "draft_created",
         "awaiting_approval", "approved", "manager_rejected", "request_sent", "no_risk",

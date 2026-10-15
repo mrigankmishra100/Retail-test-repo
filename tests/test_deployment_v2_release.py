@@ -125,7 +125,7 @@ class ReleaseTests(unittest.TestCase):
         answer = {'status': 'completed', 'output': 'Here is the answer', 'tool_calls': []}
         responses.create_response_sync.side_effect = ([{'status': 'completed', 'output': '', 'tool_calls': [
             {'id': 'call1', 'name': 'query_retail_data', 'arguments': '{"dataset":"inventory"}'}]}, answer]
-            if ask_tool else [answer])
+            if ask_tool else [answer, answer])
         result = run_conversation(responses=responses, tools=tools, message='Inventory question')
         return result, responses, tools
 
@@ -133,7 +133,10 @@ class ReleaseTests(unittest.TestCase):
         _, responses, _ = self._graph(ask_tool=False)
         names = {tool['name'] for tool in responses.create_response_sync.call_args.kwargs['tools']}
         self.assertNotIn('query_retail_data', names)
-        self.assertTrue({'get_inventory_risk', 'get_item_sales_history', 'search_policy_documents'} <= names)
+        self.assertTrue({'get_inventory_risk', 'get_item_sales_history'} <= names)
+        self.assertNotIn('search_policy_documents', names)
+        self.assertNotIn('get_supplier_policy', names)
+        self.assertTrue(responses.create_response_sync.call_args_list[0].kwargs['require_file_search'])
 
     def test_disabled_query_cannot_be_called_by_model(self):
         result, _, tools = self._graph()
@@ -154,7 +157,7 @@ class ReleaseTests(unittest.TestCase):
 
     def test_failed_tool_does_not_get_verified_answer_route(self):
         container = SimpleNamespace(cache=OCICacheClient(allow_memory=True), responses=SimpleNamespace(enabled=True),
-            settings=SimpleNamespace(enterprise_ai_conversation_state_enabled=False))
+            settings=SimpleNamespace(enterprise_ai_conversation_state_enabled=False, enterprise_ai_guardrails_enabled=False))
         service = RetailConversationService(container)
         service._load_history = Mock(return_value={'exists': False, 'next_turn': 1, 'messages': []})
         service._save_turn = Mock()
@@ -165,6 +168,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(result['response_route'], 'LLM')
         self.assertEqual(service._save_turn.call_args.kwargs['status'], 'FAILED')
         self.assertNotIn('Invented', result['message'])
+        self.assertEqual(result['llm_status'], 'unavailable')
 
     def test_enabled_query_executes_fixed_read_operation(self):
         db = Mock()

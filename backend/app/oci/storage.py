@@ -1,4 +1,5 @@
 """OCI Object Storage client boundary for supplier policy PDFs."""
+from app.live_activity import activity_step
 
 from pathlib import Path
 import re
@@ -71,6 +72,7 @@ class OCIStorageClient:
         return PolicyStorageError({401: "authentication_failed", 403: "access_denied",
                                    404: "object_not_found"}.get(status, "storage_unavailable"))
 
+    @activity_step('storage', 'Reading policy document')
     def get_policy_document(self, object_name: str) -> bytes:
         """Download at most 2 MB and always close the HTTP response."""
         self.validate_name(object_name)

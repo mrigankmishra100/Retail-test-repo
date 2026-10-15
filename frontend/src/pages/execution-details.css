@@ -1,0 +1,27 @@
+.security-decision, .query-evidence { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; margin: 14px 0; min-width: 0; max-width: 100%; }
+.security-decision { border: 1px solid #e6d6cc; border-left: 3px solid #a94c35; border-radius: 9px; padding: 14px 16px; background: #fcf8f5; color: #453a34; }
+.security-decision.failed { border-color: #e3d7bb; border-left-color: #9b742b; background: #fcfaf4; }
+.security-decision-heading { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.security-decision-heading strong { font-size: 13px; }
+.security-decision-heading > span { color: #7c7168; margin-left: auto; font-size: 11px; }
+.security-decision > p { margin: 9px 0 11px; line-height: 1.6; font-size: 12px; }
+.security-decision summary, .query-evidence > summary { cursor: pointer; font-size: 12px; color: #62564c; }
+.security-decision details[open] > summary { margin-bottom: 14px; }
+.execution-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 20px; margin: 0; }
+.execution-detail-grid dt { color: #81766d; font-size: 10px; margin-bottom: 4px; }
+.execution-detail-grid dd { margin: 0; color: #453a34; overflow-wrap: anywhere; }
+.execution-detail-note { font-size: 11px; line-height: 1.6; color: #81766d; }
+.query-evidence { border: 1px solid #e5e1da; border-radius: 8px; background: #faf9f7; padding: 12px 14px; }
+.query-evidence > summary { display: flex; align-items: center; gap: 8px; }
+.query-evidence > summary::after { content: '⌄'; margin-left: auto; }
+.query-evidence[open] > summary::after { transform: rotate(180deg); }
+.query-evidence > summary > span { font-size: 10px; color: #66755e; background: #eef2ea; border-radius: 4px; padding: 3px 6px; }
+.query-evidence-heading { display: flex; justify-content: space-between; gap: 10px; margin: 16px 0 8px; color: #675d54; text-transform: capitalize; }
+.query-evidence-heading span { font-size: 11px; text-transform: none; }
+.query-evidence pre { max-width: 100%; overflow: auto; max-height: 360px; background: #f0eeea; color: #423e38; padding: 12px; border-radius: 6px; font-size: 11px; line-height: 1.7; white-space: pre; }
+.query-evidence pre:focus-visible { outline: 2px solid #96816b; outline-offset: 2px; }
+.query-bindings { max-width: 100%; overflow-x: auto; }
+.query-evidence table { width: 100%; border-collapse: collapse; text-align: left; font-size: 11px; }
+.query-evidence caption { text-align: left; font-size: 11px; padding: 4px 0 8px; color: #81766d; }
+.query-evidence th, .query-evidence td { height: auto; padding: 7px 8px; line-height: 1.5; border-bottom: 1px solid #e5e1da; overflow-wrap: anywhere; }
+@media (max-width: 650px) { .security-decision { padding: 12px; } .security-decision-heading > span { margin-left: 26px; width: 100%; } .execution-detail-grid { grid-template-columns: 1fr; } .query-evidence { padding: 10px; } }

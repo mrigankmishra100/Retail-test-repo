@@ -5,7 +5,7 @@ import subprocess
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--docker", default="docker")
-parser.add_argument("--prefix", default="retail-v4-source-validation")
+parser.add_argument("--prefix", default="retail-v5-source-validation")
 args = parser.parse_args()
 
 check = '''

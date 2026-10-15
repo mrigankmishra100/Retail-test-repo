@@ -11,8 +11,8 @@
 }
 .registry-fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
-  gap: 18px;
+  grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 .registry-form label {
   align-items: stretch;
@@ -35,10 +35,31 @@
   font-size: 12px;
 }
 .registry-description {
-  min-width: 160px;
-  max-width: 300px;
   overflow-wrap: anywhere;
   white-space: normal;
+}
+.agent-registry .table-scroll { overflow: visible; }
+.agent-registry table { table-layout: fixed; white-space: normal; }
+.agent-registry th, .agent-registry td { height: auto; padding: 12px 10px; font-size: 11px; vertical-align: top; }
+.agent-registry td strong { font-size: 12px; }
+.agent-registry td button { min-height: 30px; padding: 6px 10px; font-size: 11px; }
+.registry-optional, .registry-agent-details { font-size: 11px; color: #736a60; }
+.registry-optional summary, .registry-agent-details summary { cursor: pointer; }
+.registry-optional label { margin-top: 10px; }
+.registry-agent-details { margin-top: 7px; }
+.registry-agent-details p { margin: 10px 0; font-size: 11px; }
+.registry-agent-details span { display: block; margin: 10px 0 5px; font-size: 10px; }
+.registry-agent-details code { display: block; font-size: 10px; line-height: 1.6; overflow-wrap: anywhere; }
+@media (max-width: 650px) {
+  .registry-fields { grid-template-columns: minmax(0, 1fr); }
+  .agent-registry table, .agent-registry tbody { display: block; }
+  .agent-registry thead { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); }
+  .agent-registry tbody tr { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .agent-registry tbody td { padding: 0; border: 0; }
+  .agent-registry .registry-description { grid-column: 1 / -1; }
+  .agent-registry th, .agent-registry td { padding: 10px 5px; font-size: 10px; }
+  .agent-registry td button { padding: 6px; font-size: 10px; }
+  .agent-registry .badge { font-size: 9px; padding: 3px 5px; }
 }
 .registry-description small {
   white-space: pre-wrap;

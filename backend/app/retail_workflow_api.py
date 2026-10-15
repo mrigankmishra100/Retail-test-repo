@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header
 from app.agents.contracts import StartRetailWorkflow, RetailSelection, ResumeRetailWorkflow, RetailWorkflowResponse
 from app.dependencies import get_container
+from app.agents.contracts import WorkflowModelSelection
 from app.session_api import retail_session
 from app.services.sessions import SessionContext
 from app.case_api import invoke
@@ -25,6 +26,12 @@ def start(body: StartRetailWorkflow | None = None, session: SessionContext = Dep
 @router.get("/{thread_id}", response_model=RetailWorkflowResponse)
 def get(thread_id: UUID, session: SessionContext = Depends(retail_session), service=Depends(workflow_service)):
     return invoke(service.get, str(thread_id), session=session)
+
+
+@router.post('/{thread_id}/model', response_model=RetailWorkflowResponse)
+def change_model(thread_id: UUID, body: WorkflowModelSelection,
+                 session: SessionContext = Depends(retail_session), service=Depends(workflow_service)):
+    return invoke(service.change_model, str(thread_id), body.model_profile, session=session)
 
 
 @router.post("/{thread_id}/selection", response_model=RetailWorkflowResponse)

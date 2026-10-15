@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.dependencies import get_container
+from app.enterprise_ai.external import ExternalModelUnavailable
 from app.session_api import current_session, retail_session
 from app.services.sessions import SessionContext
 from app.services.cases import CaseConflict, CaseNotFound
@@ -51,7 +52,12 @@ def invoke(action, *args, **kwargs):
     except (CaseConflict, WorkflowBusy) as exc:
         raise HTTPException(409, str(exc)) from exc
     except PermissionError as exc:
+        from app.services.agent_registry import AgentUnavailable
+        if isinstance(exc, AgentUnavailable):
+            raise HTTPException(503, str(exc)) from exc
         raise HTTPException(403, str(exc)) from exc
+    except ExternalModelUnavailable as exc:
+        raise HTTPException(503, {'code': exc.public_code}) from exc
     except PolicyDocumentError as exc:
         raise HTTPException(503, {"code": "policy_unavailable"}) from exc
     except NotificationDeliveryError as exc:

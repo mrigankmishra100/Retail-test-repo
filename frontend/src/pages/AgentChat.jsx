@@ -2,6 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import api from '../api';
 import { Badge, ErrorNotice, Icon, Loading, Status, number, useAction, useResource } from '../ui';
 import ChatRequest, { ChatQuotes, WorkflowReply } from './ChatWorkflow';
+import { RunMetrics } from './ChatEvaluation';
+import ChatActivity, { useActivityRuns } from './ChatActivity';
+import PromptNavigator from './PromptNavigator';
+import Markdown from '../Markdown';
+import ExternalModelDialog from './ExternalModelDialog';
+import SecurityDecision from './SecurityDecision';
+import QueryDetails from './QueryDetails';
 
 // Only explicit UI actions call mutation endpoints. Model text never becomes an approval.
 export default function AgentChat({ session, thread, setThread, onChange, chatTarget, active, navigate }) {
@@ -13,11 +20,35 @@ export default function AgentChat({ session, thread, setThread, onChange, chatTa
     [itemId, setItemId] = useState(''), [quantity, setQuantity] = useState(''),
     [showRequests, setShowRequests] = useState(false), [workflow, setWorkflow] = useState(null),
     [view, setView] = useState('idle'), [useRequestContext, setUseRequestContext] = useState(false);
-  const action = useAction(), end = useRef(null), lastTarget = useRef(null);
+  const action = useAction(), end = useRef(null), lastTarget = useRef(null), composer = useRef(null), transcript = useRef(null);
+  const followReply = useRef(true);
+  const catalog = useResource(() => active && retail ? api.chatModels() : Promise.resolve(null), [active, retail]);
+  const [modelProfile, setModelProfile] = useState(''), [fileSearch, setFileSearch] = useState(false);
+  const [externalDialog, setExternalDialog] = useState(false), [connectedModels, setConnectedModels] = useState([]);
+  const models = [...(catalog.data?.models || []), ...connectedModels.filter((model) => !catalog.data?.models.some((m) => m.id === model.id))];
+  const [activityReset, setActivityReset] = useState(0);
+  const activityRuns = useActivityRuns(active, activityReset);
+  function openEvaluation() { navigate('evaluation'); }
+  useEffect(() => {
+    if (catalog.data && !modelProfile) setModelProfile(catalog.data.default_profile || '');
+  }, [catalog.data]);
+  const selectedModel = models.find((m) => m.id === modelProfile);
+  async function changeModel(id, rag = false) {
+    if (thread && id !== modelProfile) {
+      const result = await action.run(`model:${thread}`, () => api.workflowModel(thread, id));
+      if (!result) return false;
+      setWorkflow(result);
+    }
+    setModelProfile(id); setFileSearch(rag); setConversation(null); setMessages([]);
+    setActivityReset((value) => value + 1);
+    setUseRequestContext(false);
+    return true;
+  }
   const requests = useResource(() => active && showRequests ? api.cases() : Promise.resolve(null), [active, showRequests], active && showRequests ? 15000 : 0);
   const checkpoint = useResource(() => retail && thread && active ? api.workflow(thread) : Promise.resolve(null), [retail, thread, active], active && thread ? 10000 : 0);
 
   function say(message, role = 'assistant', extra = {}) {
+    followReply.current = true;
     setMessages((current) => [...current, { id: crypto.randomUUID(), role, message, ...extra }].slice(-60));
   }
   function openRequest(id) {
@@ -48,12 +79,21 @@ export default function AgentChat({ session, thread, setThread, onChange, chatTa
   useEffect(() => {
     if (!checkpoint.data) return;
     setWorkflow(checkpoint.data);
+    if (checkpoint.data.model_profile) setModelProfile(checkpoint.data.model_profile);
     // A restored checkpoint must not reopen an old request during general chat.
     if (view === 'workflow' && !assessment && checkpoint.data.case) openRequest(checkpoint.data.case.case_id);
   }, [checkpoint.data]);
   useEffect(() => {
-    if (active && messages.length) end.current?.scrollIntoView({ behavior: 'auto', block: 'nearest' });
-  }, [messages, active]);
+    if (active && messages.length && followReply.current) {
+      const latest = end.current?.parentElement?.querySelector('[role="log"] > article:last-child');
+      latest?.scrollIntoView({ behavior: 'auto', block: 'start' });
+    }
+  }, [messages.at(-1)?.id, messages.at(-1)?.pending, active]);
+  useEffect(() => {
+    if (!composer.current) return;
+    composer.current.style.height = 'auto';
+    composer.current.style.height = `${Math.min(composer.current.scrollHeight, 144)}px`;
+  }, [input, active]);
 
   function prepareAssessment(text = 'Start a replenishment assessment') {
     setConversation(null);
@@ -114,15 +154,21 @@ export default function AgentChat({ session, thread, setThread, onChange, chatTa
       say('Open an assigned request below to ask the supplier agent to check stock, policy, and quote feasibility. You can review and approve its response here. For request history, use Request Activity.');
       return;
     }
+    const answerId = crypto.randomUUID();
+    say('', 'assistant', { id: answerId, pending: true });
     const result = await action.run('conversation', () => api.chat({
       message: text, intent: 'conversation',
+      ...(modelProfile ? { model_profile: modelProfile, use_file_search: fileSearch } : {}),
       ...(conversation ? { conversation_id: conversation } : {}),
       ...(useRequestContext && view === 'request' && thread && workflow?.case?.case_id === selected ? { workflow_thread_id: thread } : {}),
-    }));
+    }, answerId));
     if (result) {
-      say(result.message, 'assistant', { mode: result.mode, used_tools: result.used_tools });
+      setMessages((current) => current.map((entry) => entry.id === answerId ? { ...entry, pending: false, message: result.message, mode: result.mode, llm_status: result.llm_status, used_tools: result.used_tools, metrics: result.metrics, guardrail_status: result.guardrail_status, security_event_id: result.security_event_id, security_details: result.security_details } : entry));
       if (result.conversation_id) setConversation(result.conversation_id);
-    } else setInput(text);
+    } else {
+      setMessages((current) => current.map((entry) => entry.id === answerId ? { ...entry, pending: false, message: 'This request did not return an answer. See the error below before retrying.' } : entry));
+      setInput(text);
+    }
   }
   function updateWorkflow(result) {
     setWorkflow(result);
@@ -134,7 +180,7 @@ export default function AgentChat({ session, thread, setThread, onChange, chatTa
   }
   async function start(event) {
     event.preventDefault();
-    const body = { ...(itemId ? { item_id: itemId } : {}), ...(quantity ? { quantity: Number(quantity) } : {}) };
+    const body = { ...(modelProfile ? { model_profile: modelProfile } : {}), ...(itemId ? { item_id: itemId } : {}), ...(quantity ? { quantity: Number(quantity) } : {}) };
     // Preserve uncertain starts across refreshes. Reusing the same key recovers
     // the existing assessment instead of creating a duplicate request.
     const pendingKey = `${storageKey}.start.${JSON.stringify(body)}`;
@@ -164,24 +210,44 @@ export default function AgentChat({ session, thread, setThread, onChange, chatTa
     if (result) updateWorkflow(result);
   }
   return (
+    <div className="chat-experience">
     <section className="agent-chat chat-panel" aria-label="Agent conversation">
       <div className="chat-header">
-        <span className="assistant-emblem"><Icon name="bot" /></span>
-        <div><h2>{retail ? 'Your retail agent' : 'Your supplier agent'}</h2><p>From review to response, in one conversation</p></div>
-        <button className="text-button" disabled={action.busy} onClick={() => {
+        <h2>{retail ? 'Retail agent' : 'Supplier agent'}</h2>
+      {retail && <div className="chat-model-bar">
+        <label><span className="sr-only">Chat model</span><select aria-label="Chat model" title="Switching starts a new chat and applies to remaining workflow AI steps." value={modelProfile} disabled={action.busy || catalog.loading} onChange={(e) => e.target.value === '__external__' ? setExternalDialog(true) : changeModel(e.target.value)}>
+          {!models.length && <option value="">Choose a model</option>}
+          {models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+          <option value="__external__">External model…</option>
+        </select></label>
+        <label title={selectedModel?.file_search ? 'Search configured policy vector stores using OCI built-in File Search' : 'Requires configured vector stores and a compatible model'}>
+          <input type="checkbox" checked={fileSearch} disabled={action.busy || !selectedModel?.file_search || !catalog.data?.enabled} onChange={(e) => setFileSearch(e.target.checked)} /> File Search / RAG</label>
+        <button type="button" className="evaluation-shortcut" aria-label="Evaluation & metrics" title="Evaluation & metrics" onClick={openEvaluation}><Icon name="chart" size={15} /><span className="evaluation-shortcut-label">Metrics</span></button>
+        <ErrorNotice error={catalog.error} retry={catalog.reload} />
+      </div>}
+      {externalDialog && <ExternalModelDialog onClose={() => setExternalDialog(false)} onConnected={async (profile) => {
+        setConnectedModels((current) => [...current, profile]);
+        const changed = await changeModel(profile.id);
+        catalog.reload();
+        return changed;
+      }} />}
+        <button className="text-button chat-new" disabled={action.busy} onClick={() => {
           setMessages([]); setConversation(null); setUseRequestContext(false); setInput(''); setAssessment(false); setView('idle');
+          setActivityReset((value) => value + 1);
         }}>New chat</button>
       </div>
-      <div className="chat-transcript">
-        <div className="chat-welcome">
+      <div className="chat-scroll-region">
+      <PromptNavigator messages={messages} transcriptRef={transcript} active={active} onNavigate={() => { followReply.current = false; }} />
+      <div className="chat-transcript" ref={transcript} onWheel={() => { followReply.current = false; }} onTouchMove={() => { followReply.current = false; }}>
+        {!messages.length && view === 'idle' && <div className="chat-welcome">
           <article className="message assistant welcome-message">
             <span className="message-avatar"><Icon name="bot" size={19} /></span>
             <div className="message-body">
               <strong>{retail ? 'Retail agent' : 'Supplier agent'}</strong>
               <h3>{retail ? 'Hi! Let’s keep your shelves stocked.' : 'Hi! Let’s review your incoming requests.'}</h3>
               <p>{retail
-                ? 'I can help you check stock risks, compare suppliers, and prepare a replenishment request. We’ll review each step here, and you’ll approve the exact draft before anything is sent. What would you like to work on?'
-                : 'I can help you review an assigned request, check availability and policy terms, and prepare a response. You’ll review and approve the response here before it is sent. Choose a request to get started.'}</p>
+                ? 'Check stock, compare suppliers, or prepare a replenishment request.'
+                : 'Review requests, check policy terms, or prepare a supplier response.'}</p>
             </div>
           </article>
           <div className="prompt-grid">
@@ -192,13 +258,19 @@ export default function AgentChat({ session, thread, setThread, onChange, chatTa
               say('Review the saved draft and commercial terms, confirm you have read them, then select Approve draft or Reject draft. Sending is a separate explicit action. Changed drafts require a fresh review.');
             }}>How does approval work? <Icon name="arrow" size={16} /></button>
           </div>
-        </div>
+        </div>}
         <div role="log" aria-live="polite" aria-label="Conversation messages">
-          {messages.map((m) => <article className={`message ${m.role}`} key={m.id}>
+          {messages.map((m) => <article className={`message ${m.role}`} key={m.id} id={`message-${m.id}`} data-message-id={m.id} tabIndex={-1}>
             <div className="message-avatar"><Icon name={m.role === 'user' ? 'people' : 'bot'} size={17} /></div>
-            <div className="message-body"><strong>{m.role === 'user' ? 'You' : retail ? 'Retail agent' : 'Supplier agent'}</strong><p>{m.message}</p>
-              {m.mode && <Badge>{m.mode === 'llm_read_only' ? 'Model-assisted answer' : 'Verified workflow facts'}</Badge>}
+            <div className="message-body"><strong>{m.role === 'user' ? 'You' : retail ? 'Retail agent' : 'Supplier agent'}</strong>
+              {m.role === 'assistant' && <ChatActivity runs={activityRuns.filter((run) => run.client_message_id === m.id)} answerStatus={m.llm_status} guardrailStatus={m.guardrail_status} />}
+              {m.role === 'assistant' && <SecurityDecision details={m.security_details} status={m.guardrail_status} />}
+              {m.message && (m.role === 'assistant' ? (!['BLOCKED', 'FAILED'].includes(m.guardrail_status) && <Markdown>{m.message}</Markdown>) : <p>{m.message}</p>)}
+              {m.mode && !['BLOCKED', 'FAILED'].includes(m.guardrail_status) && <Badge>{['unavailable', 'disabled', 'limit_reached'].includes(m.llm_status) ? 'Answer unavailable' : m.mode === 'llm_read_only' ? 'Model-assisted answer' : 'Verified workflow facts'}</Badge>}
+              {m.guardrail_status === 'PASSED' && <small className="security-indicator">Injection checks passed</small>}
+              {m.metrics?.queries?.length > 0 && <QueryDetails queries={m.metrics.queries} />}
               {m.used_tools?.length > 0 && <small>Checked with: {m.used_tools.join(', ')}</small>}
+              {m.metrics && <details className="chat-answer-metrics"><summary>Response metrics & sources</summary><RunMetrics metrics={m.metrics} compact /></details>}
             </div>
           </article>)}
         </div>
@@ -231,22 +303,27 @@ export default function AgentChat({ session, thread, setThread, onChange, chatTa
         {view === 'workflow' && workflow && retail && <WorkflowReply label="Agent assessment" step="Here’s what I found">
           <Status value={workflow.status} />
           <p>{workflow.message}</p>{workflow.advisory && <p className="callout">{workflow.advisory}</p>}
+          {workflow.llm_status === 'unavailable' && <p className="callout" role="status">Inventory and supplier checks completed, but the selected model could not produce its recommendation. Review Metrics or reconnect the model.</p>}
           {workflow.comparison && <ChatQuotes quotes={workflow.comparison.suppliers} recommendedSupplierId={workflow.comparison.recommended_supplier_id}
             onSelect={workflow.pending_input === 'selection' ? select : undefined} busy={action.busy || Boolean(checkpoint.error)} />}
           {workflow.can_resume && workflow.pending_input !== 'selection' && <button disabled={action.busy || Boolean(checkpoint.error) || workflow.status === 'delivery_reconciliation_required'} onClick={resume}>Continue assessment</button>}
         </WorkflowReply>}
         {view === 'request' && selected && active && <ChatRequest key={selected} id={selected} session={session} onChange={onChange} onMessage={say} />}
-        {action.busy && <Loading label="The agent is checking your request…" />}
+        <ChatActivity runs={activityRuns.filter((run) => !run.client_message_id).slice(-8)} />
         <ErrorNotice error={action.error} />
         <div ref={end} />
       </div>
+      </div>
       <form className="chat-compose" onSubmit={send}>
         {retail && view === 'request' && workflow?.case?.case_id === selected && <label className="chat-context-choice"><input type="checkbox" disabled={action.busy} checked={useRequestContext} onChange={(e) => { setUseRequestContext(e.target.checked); setConversation(null); }} /> Use this request as context for my questions</label>}
-        <div className="compose-input"><textarea aria-label="Message to agent" required rows="2" maxLength="4000" value={input} onChange={(e) => setInput(e.target.value)} disabled={action.busy} placeholder={retail ? 'Ask a question or ask to start an assessment…' : 'Ask to review incoming requests or check request status…'} />
+        <div className="compose-input"><textarea ref={composer} aria-label="Message to agent" aria-describedby="compose-hint" required rows="1" maxLength="4000" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !action.busy) { e.preventDefault(); e.currentTarget.form.requestSubmit(); }
+        }} disabled={action.busy} placeholder={retail ? 'Ask your agent…' : 'Ask about your requests…'} />
           <button className="primary" disabled={action.busy || !input.trim()} aria-label="Send message"><Icon name="arrow" /></button>
         </div>
-        <small>Approval and sending require the explicit controls in this chat. Your message alone cannot commit an order.</small>
+        <small id="compose-hint">Enter to send · Shift+Enter for a new line · Orders require explicit approval.</small>
       </form>
     </section>
+    </div>
   );
 }

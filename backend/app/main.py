@@ -24,10 +24,15 @@ if settings.application_role != 'backend':
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
-    """Configure local process concerns without contacting external services."""
+    """Initialize the process and optionally register deployed agent endpoints."""
     configure_logging()
+    get_container().central_logs.start()
     logger.info("Retail Inventory Agent API starting")
     try:
+        container = application.state.container
+        if container.settings.agent_registry_bootstrap_enabled and container.settings.agent_endpoints:
+            from asyncio import to_thread
+            await to_thread(container.agent_registry_service.bootstrap, container.settings.agent_endpoints)
         async with mcp_http_app.lifespan(application):
             application.state.ready = True
             yield
@@ -41,6 +46,8 @@ app = FastAPI(title="Retail Inventory Agent POC", version="1.0.0", lifespan=life
 app.state.ready = False
 install_http_contract(app)
 app.add_middleware(HttpLoggingMiddleware, service="retail-api")
+from app.live_activity import ActivityMiddleware
+app.add_middleware(ActivityMiddleware)
 app.state.container = get_container()
 from app.oci.studio_notification_probe import install_fastapi
 install_fastapi(app, lambda: app.state.container.notifications)

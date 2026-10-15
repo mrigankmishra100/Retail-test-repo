@@ -1,4 +1,5 @@
 """Lazy, allowlisted Oracle Database adapter for business data."""
+from app.live_activity import activity_step
 
 from dataclasses import dataclass
 from contextlib import contextmanager
@@ -71,6 +72,10 @@ READ_OPERATIONS: dict[str, DatabaseOperation] = {
     "registry_active_endpoint": DatabaseOperation(
         sql="""SELECT endpoint_url FROM agent_registry WHERE agent_type=:agent_type AND active=1
             FETCH FIRST 2 ROWS ONLY""",
+        parameter_names=frozenset({"agent_type"}), kind="read"),
+    "registry_role_status": DatabaseOperation(
+        sql="""SELECT COUNT(*) AS registered_count, COALESCE(SUM(active),0) AS active_count
+            FROM agent_registry WHERE agent_type=:agent_type""",
         parameter_names=frozenset({"agent_type"}), kind="read"),
     "connection_probe": DatabaseOperation(
         sql="SELECT 1 AS connection_ok FROM dual", parameter_names=frozenset(), kind="read"),
@@ -318,6 +323,12 @@ READ_OPERATIONS: dict[str, DatabaseOperation] = {
 
 
 WRITE_OPERATIONS: dict[str, DatabaseOperation] = {
+    "registry_bootstrap_agent": DatabaseOperation(
+        sql="""INSERT INTO agent_registry (agent_id,name,agent_type,description,endpoint_url,active)
+            SELECT :agent_id,:name,:agent_type,:description,:endpoint_url,:active FROM dual
+            WHERE NOT EXISTS (SELECT 1 FROM agent_registry WHERE agent_type=:agent_type)""",
+        parameter_names=frozenset({"agent_id", "name", "agent_type", "description", "endpoint_url", "active"}),
+        kind="write"),
     "registry_create_agent": DatabaseOperation(
         sql="""INSERT INTO agent_registry (agent_id,name,agent_type,description,endpoint_url,active)
             VALUES (:agent_id,:name,:agent_type,:description,:endpoint_url,:active)""",
@@ -493,6 +504,7 @@ class OracleDatabaseClient:
         """Expose pool state for readiness diagnostics without opening it."""
         return self._pool is not None
 
+    @activity_step('database', 'Reading Oracle data')
     def fetch_all(
         self,
         operation: str,
@@ -533,6 +545,7 @@ class OracleDatabaseClient:
         self._log_operation(operation, started_at, "success", trace_context)
         return rows
 
+    @activity_step('database', 'Updating Oracle data')
     def execute(
         self,
         operation: str,
@@ -721,6 +734,7 @@ class CaseTransaction:
     def __init__(self, connection):
         self.connection = connection
 
+    @activity_step('database', 'Executing database transaction step')
     def run(self, operation: str, **binds):
         from app.oci.case_sql import SQL, CLOB_BINDS
         try:

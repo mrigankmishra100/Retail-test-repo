@@ -22,7 +22,7 @@ async function workspace(page, role, { unavailable = false, conflict = false } =
       expect(request.headers().authorization).toBe(`Bearer ${session.session_token}`);
       requests.push({ method: request.method(), path });
       if (unavailable) return route.fulfill({ status: 503, json: { error: { message: 'Unavailable' } } });
-      if (request.method() === 'GET') return route.fulfill({ json: { items: agents, has_more: false } });
+      if (request.method() === 'GET') return route.fulfill({ json: { items: agents, has_more: false, enforcement_enabled: true } });
       if (conflict) return route.fulfill({ status: 409, json: { error: { message: 'Conflict' } } });
       if (path === '/registry/agents') {
         const agent = { ...request.postDataJSON(), agent_id: '22222222-2222-4222-8222-222222222222',
@@ -45,14 +45,27 @@ for (const role of ['retail-manager', 'supplier']) {
   test(`${role} can register, activate and deactivate an agent`, async ({ page }, testInfo) => {
     const { agents, requests } = await workspace(page, role);
     await expect(page.getByText('No registered agents')).toBeVisible();
+    await page.getByText('Registration and routing', { exact: true }).click();
+    await expect(page.locator('.registry-guidance')).toContainText('deactivating the last active Retail or Supplier entry blocks');
+    await page.getByText('Registration and routing', { exact: true }).click();
     await page.getByLabel('Name', { exact: true }).fill('Demo agent');
     await page.getByLabel('Role / type').selectOption('CUSTOM');
+    await page.getByText('Add a description', { exact: true }).click();
     await page.getByLabel('Description', { exact: true }).fill('Stored for a later integration');
     await page.getByLabel('Public OCI Hosted Application URL').fill(endpoint);
     await page.getByRole('button', { name: 'Register agent', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Demo agent registered.' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: endpoint, exact: true })).toBeVisible();
+    const details = page.getByLabel('Details for Demo agent', { exact: true });
+    await expect(page.locator('.registry-agent-details')).not.toHaveAttribute('open');
+    await details.click();
+    await expect(page.locator('.registry-agent-details code')).toHaveText(endpoint);
+    await details.click();
     await expect(page.getByText('Stored only', { exact: true })).toBeVisible();
+    await page.getByText('Add a description', { exact: true }).click();
+    const registration = await page.locator('.registry-registration').boundingBox();
+    const directory = await page.locator('.registry-directory').boundingBox();
+    expect(directory.y).toBeGreaterThanOrEqual(registration.y + registration.height);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath('registry-desktop.png'), fullPage: true });
     await page.getByRole('button', { name: 'Activate Demo agent', exact: true }).click();
     await expect(page.getByRole('cell', { name: 'Active', exact: true })).toBeVisible();
@@ -102,4 +115,24 @@ test('registry form fits a mobile viewport', async ({ page }, testInfo) => {
   await expect(page.getByLabel('Name', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('registry-mobile.png'), fullPage: true });
+});
+
+test('wide registry stays vertical and long agent endpoints never push actions off screen', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  const { agents } = await workspace(page, 'retail-manager');
+  agents.push({ agent_id: '33333333-3333-4333-8333-333333333333', name: 'Retail Agent',
+    agent_type: 'RETAIL', description: 'Retail worker', endpoint_url: endpoint.replace('example', 'x'.repeat(90)), active: true });
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Deactivate Retail Agent', exact: true })).toBeVisible();
+  const registration = await page.locator('.registry-registration').boundingBox();
+  const directory = await page.locator('.registry-directory').boundingBox();
+  expect(directory.y).toBeGreaterThanOrEqual(registration.y + registration.height);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await page.getByLabel('Details for Retail Agent', { exact: true }).click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('registry-wide.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await expect(page.getByRole('button', { name: 'Deactivate Retail Agent', exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('registry-agent-mobile.png'), fullPage: true });
 });

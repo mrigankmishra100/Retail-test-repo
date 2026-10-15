@@ -22,6 +22,8 @@ async function setup(page, role = 'retail-manager', options = {}) {
     const reply = (data, status = 200) => route.fulfill({ status, json: data });
     if (path === '/sessions/me') return reply(session);
     if (path === '/health') return reply({ status: 'ok' });
+    if (path === '/chat/models') return reply({ models: [], enabled: false, default_profile: null });
+    if (path === '/chat/metrics') return reply({ records: [] });
     if (path === '/inventory/risks') return reply({ summary: { inventory_item_count: 5, at_risk_count: 1, not_at_risk_count: 4, missing_history_count: 0 }, rules: {}, at_risk_items: [{ item_id: 'ITEM001', item_name: 'Ice Cream', current_stock: 10, status: 'at_risk', days_of_supply: 1, recommended_quantity: 100 }], not_at_risk_items: [], unassessed_items: [] });
     if (path === '/cases') return reply({ items: options.empty ? [] : [state.record], has_more: false });
     if (path === `/cases/${id}`) return reply(state.record);
@@ -90,9 +92,9 @@ for (const role of ['retail-manager', 'supplier']) {
     await expect(page.locator('.bot-orbit')).toHaveCSS('animation-name', 'none');
   });
 
-  test(`${role}: three tabs, no overview shortcuts, activity is read-only`, async ({ page }) => {
+  test(`${role}: role navigation, no overview shortcuts, activity is read-only`, async ({ page }) => {
     const state = await setup(page, role);
-    await expect(page.getByRole('navigation').getByRole('button')).toHaveText(['Overview', 'Agent Chat', 'Request Activity']);
+    await expect(page.getByRole('navigation').getByRole('button')).toHaveText(role === 'retail-manager' ? ['Overview', 'Agent Chat', 'Evaluation & metrics', 'Request Activity', 'Agent registry'] : ['Overview', 'Agent Chat', 'Request Activity', 'Agent registry']);
     await expect(page.getByRole('button', { name: 'Start replenishment', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Ask your assistant', exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Request Activity', exact: true }).click();
@@ -124,7 +126,7 @@ test('retail: assessment, supplier selection, exact-draft approval and dispatch 
   expect(state.calls.filter((c) => c.path.includes('/dispatch/'))).toHaveLength(0);
   await dispatch.click();
   await expect(page.getByRole('region', { name: 'Request review in chat' })).toContainText('Awaiting supplier approval');
-  await expect(page.getByRole('heading', { name: 'Retail Agent Chat' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Retail agent', exact: true })).toBeVisible();
   await page.reload();
   await page.getByRole('button', { name: 'Agent Chat', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Request review in chat' })).toHaveCount(0);
@@ -140,12 +142,12 @@ test('supplier: checks, approval and response completion stay in chat', async ({
   await page.getByRole('button', { name: 'Start supplier review', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Approve draft', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Review response and terms', exact: true }).click();
-  await page.getByRole('checkbox').check();
+  await page.getByRole('checkbox', { name: /I have reviewed the supplier response/ }).check();
   await page.getByRole('button', { name: 'Approve draft', exact: true }).click();
   await page.getByRole('button', { name: 'Send approved response & complete', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Approved request summary' }).first()).toBeVisible();
   expect(state.record.status).toBe('COMPLETED');
-  await expect(page.getByRole('heading', { name: 'Supplier Agent Chat' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Supplier agent', exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath('supplier-completed.png'), fullPage: true });
 });
 
@@ -162,7 +164,7 @@ test('stale email preview blocks approval', async ({ page }) => {
   await setup(page, 'retail-manager', { stalePreview: true });
   await page.locator('.lower-grid').getByRole('button', { name: 'Review in chat', exact: true }).click();
   await page.getByRole('button', { name: 'Review draft and terms', exact: true }).click();
-  await page.getByRole('checkbox').check();
+  await page.getByRole('checkbox', { name: /I have reviewed this draft/ }).check();
   await expect(page.getByRole('button', { name: 'Approve draft', exact: true })).toBeDisabled();
   await expect(page.getByText('The email snapshot no longer matches this case version. Refresh before approving.')).toBeVisible();
 });
@@ -171,7 +173,7 @@ test('conflict requires a fresh review', async ({ page }) => {
   await setup(page, 'retail-manager', { conflict: true });
   await page.locator('.lower-grid').getByRole('button', { name: 'Review in chat', exact: true }).click();
   await page.getByRole('button', { name: 'Review draft and terms', exact: true }).click();
-  await page.getByRole('checkbox').check();
+  await page.getByRole('checkbox', { name: /I have reviewed this draft/ }).check();
   await page.getByRole('button', { name: 'Approve draft', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Approve draft', exact: true })).toBeDisabled();
   await expect(page.getByRole('alert')).toContainText('conflict-trace');

@@ -107,7 +107,7 @@ def key_probe_outcome(headers, key):
 class AgentInvocation(BaseModel):
     model_config = ConfigDict(extra='forbid', hide_input_in_errors=True)
     audience: Literal['retail', 'supplier']
-    operation: Literal['start', 'get', 'select', 'resume', 'chat']
+    operation: Literal['start', 'get', 'select', 'resume', 'change_model', 'chat', 'chat_catalog', 'chat_evaluate', 'connect_model', 'discover_models']
     issued_at: int
     nonce: UUID
     session: SessionContext

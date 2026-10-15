@@ -10,8 +10,21 @@ from app.oci.cache import CacheUnavailable
 from app.observability.context import TraceContext, request_trace_id
 from app.observability import LangfuseObservabilityClient
 from fastmcp.exceptions import ToolError
+from app.enterprise_ai.guardrails import (GuardrailDenied, BLOCK_MESSAGE as SECURITY_BLOCK_MESSAGE, FAILURE_MESSAGE,
+                                        public_security_decision, local_security_decision)
 
 logger = logging.getLogger(__name__)
+
+
+def security_response(error, request):
+    verdict = error.verdict
+    return {'mode': 'deterministic_read_only',
+            'message': SECURITY_BLOCK_MESSAGE if verdict['status'] == 'BLOCKED' else FAILURE_MESSAGE,
+            'llm_status': 'blocked' if verdict['status'] == 'BLOCKED' else 'unavailable',
+            'guardrail_status': verdict['status'], 'security_event_id': verdict['event_id'],
+            'security_details': public_security_decision(verdict),
+            'conversation_id': str(request.conversation_id) if request.conversation_id else None,
+            'used_tools': [], 'allowed_actions': [], 'response_route': 'BLOCKED'}
 
 ACTION_REQUEST = re.compile(
     r"\b(?:please\s+|can\s+you\s+|could\s+you\s+|go\s+ahead\s+and\s+)?"
@@ -46,17 +59,15 @@ class RetailConversationService:
         self.container = container
         self.observability = getattr(container, "langfuse", None) or LangfuseObservabilityClient()
 
-    def _run(self, *, session, message, history=(), facts=None, conversation_id=None):
+    def _run(self, *, session, message, history=(), facts=None, conversation_id=None, input_screened=False):
         CaseService._session(session).require_role("retail-manager")
         settings = self.container.settings
-        # Enabled hosted protections/continuity must never be silently bypassed.
-        if settings.enterprise_ai_guardrails_enabled:
-            raise NotImplementedError("Hosted guardrails are not implemented")
         if settings.enterprise_ai_conversation_state_enabled and settings.enterprise_ai_api_mode != 'responses':
             raise RuntimeError('Hosted conversations require OCI Responses mode')
         return run_conversation(responses=self.container.responses,
             tools=RetailToolAccess(self.container, session), message=message, history=history, facts=facts,
-            conversation_id=conversation_id)
+            conversation_id=conversation_id, input_screened=input_screened,
+            guardrails=self.container.guardrails if settings.enterprise_ai_guardrails_enabled else None)
 
     def _load_history(self, conversation_id, workflow_id, session):
         started = monotonic()
@@ -117,6 +128,18 @@ class RetailConversationService:
             return {"advisory": None, "llm_status": "unavailable"}
 
     def respond(self, request, *, session):
+        CaseService._session(session).require_role('retail-manager')
+        from app.services.agent_registry import enforce_agent
+        enforce_agent(self.container, 'retail')
+        try:
+            if self.container.settings.enterprise_ai_guardrails_enabled:
+                self.container.guardrails.require_sync(request.message, session.role, stage='input', source='user')
+            return self._respond(request, session=session)
+        except GuardrailDenied as exc:
+            return security_response(exc, request)
+
+    def _respond(self, request, *, session):
+        CaseService._session(session).require_role("retail-manager")
         conversation_id = str(request.conversation_id or uuid4())
         workflow_id = str(request.workflow_thread_id) if request.workflow_thread_id else None
         session_id = getattr(session, "session_id", None)
@@ -130,7 +153,7 @@ class RetailConversationService:
             metadata={"workflow": "retail_conversation", "response_mode": "read_only"},
             context=context,
         ) as observation:
-            result = self._respond(request, session=session, conversation_id=conversation_id,
+            result = self._respond_turn(request, session=session, conversation_id=conversation_id,
                                    workflow_id=workflow_id)
             observation.update(
                 output={"message": result["message"], "used_tools": result["used_tools"]},
@@ -140,7 +163,7 @@ class RetailConversationService:
             )
             return result
 
-    def _respond(self, request, *, session, conversation_id, workflow_id):
+    def _respond_turn(self, request, *, session, conversation_id, workflow_id):
         CaseService._session(session).require_role("retail-manager")
         cache, facts = self.container.cache, None
         # Read authoritative workflow/case state on every turn, never trust cached assistant prose.
@@ -152,9 +175,21 @@ class RetailConversationService:
             if request.conversation_id and not stored["exists"]:
                 raise CaseNotFound("Conversation not found or expired")
             history = self._model_history(stored)
+            # Retrieval is a per-turn tool choice. Keep history when it changes,
+            # while still binding the conversation to its owner and model/provider.
+            selection = getattr(self.container, 'chat_selection', None)
+            if selection is not None:
+                binding_key = 'chat_model:' + conversation_id
+                previous = cache.get_state(binding_key)
+                identity = lambda value: {key: item for key, item in value.items() if key != 'file_search'}
+                if (previous is not None and identity(previous) != identity(selection)) or (previous is None and request.conversation_id):
+                    raise CaseConflict('Model settings changed; start a new chat')
+                if not cache.set_state(binding_key, selection):
+                    raise CacheUnavailable('Chat model selection could not be stored')
             turn_number = stored["next_turn"]
             if is_action_request(request.message):
-                result = {"answer": BLOCKED_MESSAGE, "llm_status": "blocked", "used_tools": []}
+                result = {"answer": BLOCKED_MESSAGE, "llm_status": "blocked", "used_tools": [],
+                          'security_details': local_security_decision('action_requires_approval')}
                 route, guardrail, status = "BLOCKED", "BLOCKED", "BLOCKED"
             elif not self.container.responses.enabled:
                 result = {"answer": "AI conversation is disabled. Use the deterministic inventory and workflow controls.",
@@ -187,13 +222,17 @@ class RetailConversationService:
                     result = self._run(
                         session=session, message=request.message,
                         history=history if not hosted or created else (), facts=facts,
-                        conversation_id=hosted_id)
+                        conversation_id=hosted_id, input_screened=True)
                     CaseService._session(session).require_role("retail-manager")
                     if hosted:
                         provider["in_flight"] = result["llm_status"] != "completed"
                         if not cache.set_state(provider_key, provider):
                             raise CacheUnavailable("Conversation ownership could not be stored")
+                except GuardrailDenied:
+                    raise
                 except Exception as exc:
+                    from app.enterprise_ai.external import ExternalModelUnavailable, EXTERNAL_ERROR_MESSAGES
+                    external_failure = isinstance(exc, ExternalModelUnavailable)
                     logger.warning('retail_conversation_failed', extra={'conversation_id': conversation_id,
                         'stage': 'model_or_conversation', 'error_type': type(exc).__name__}, exc_info=True)
                     if created and hosted_id:
@@ -207,25 +246,32 @@ class RetailConversationService:
                             turn_number=turn_number, request_message=request.message,
                             answer="Retail conversation unavailable.", route="LLM", status="FAILED",
                             guardrail="NOT_APPLIED", used_tools=[], llm_status="disabled", session=session,
-                            error_code="model_unavailable")
+                            error_code=exc.public_code if external_failure else "model_unavailable")
                     except Exception as history_exc:
                         logger.warning('chat_failed_turn_not_saved', extra={'conversation_id': conversation_id,
                             'stage': 'history_write', 'error_type': type(history_exc).__name__})
                     logger.warning("Retail conversation model request unavailable")
+                    if external_failure:
+                        return {'mode': 'deterministic_read_only',
+                            'message': EXTERNAL_ERROR_MESSAGES.get(exc.public_code, 'The external model request failed. Check the selected model and provider access.'),
+                            'llm_status': 'unavailable', 'conversation_id': conversation_id,
+                            'used_tools': [], 'allowed_actions': [], 'response_route': 'LLM',
+                            'guardrail_status': 'PASSED' if self.container.settings.enterprise_ai_guardrails_enabled else 'NOT_APPLIED'}
                     raise RuntimeError("Retail conversation unavailable") from None
                 route = "NL2SQL" if "query_retail_data" in result.get("successful_tools", []) else "LLM"
-                # These are local business checks, not a managed OCI guardrail verdict.
-                guardrail, status = "NOT_APPLIED", "COMPLETED"
+                # Model-loop security checks passed; commercial authority is checked separately below.
+                guardrail, status = ("PASSED" if self.container.settings.enterprise_ai_guardrails_enabled else "NOT_APPLIED"), "COMPLETED"
                 if result.get('failed_tools') or result['llm_status'] != 'completed':
                     route, status = 'LLM', 'FAILED'
                     if result.get('failed_tools'):
                         result = {**result, 'answer': 'The requested live data could not be verified. Please retry later or use the inventory and workflow controls.',
-                                  'llm_status': 'disabled'}
+                                  'llm_status': 'unavailable'}
                     logger.warning('retail_conversation_incomplete', extra={'conversation_id': conversation_id,
                         'stage': 'tool_results', 'status': 'failed', 'reason': 'unverified_data_or_limit'})
                 if ACTION_CLAIM.search(result["answer"]):
                     result = {"answer": BLOCKED_MESSAGE, "llm_status": "blocked",
-                              "used_tools": result["used_tools"]}
+                              "used_tools": result["used_tools"],
+                              'security_details': local_security_decision('unverified_action_claim', source='model')}
                     route, guardrail, status = "BLOCKED", "BLOCKED", "BLOCKED"
             try:
                 self._save_turn(conversation_id=conversation_id, workflow_id=workflow_id,
@@ -240,5 +286,6 @@ class RetailConversationService:
             "conversation_id": conversation_id, "workflow_thread_id": workflow_id,
             "used_tools": result["used_tools"], "allowed_actions": ["view_inventory_risks", "view_cases", "start_retail_workflow"],
             "response_route": route, "guardrail_status": guardrail,
+            'security_details': result.get('security_details'),
             "case": view.case if workflow_id else None,
             "pending_approval": view.case.pending_approval if workflow_id and view.case else None}

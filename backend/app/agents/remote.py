@@ -1,4 +1,5 @@
 """Bounded authenticated workflow forwarding; no retries or local fallback."""
+from app.live_activity import activity_step
 from datetime import datetime, timezone
 from hashlib import sha256
 import json
@@ -37,6 +38,7 @@ class RemoteAgentClient:
         self._endpoint_resolver = endpoint_resolver
         self.observability = observability or LangfuseObservabilityClient()
 
+    @activity_step('agent', 'Calling hosted agent')
     def invoke(self, operation, payload, session):
         context = TraceContext(
             trace_id=request_trace_id.get(),
@@ -90,16 +92,29 @@ class RemoteAgentClient:
             stage = 'response_validation'
             # Responses use the same opaque encoding so required null fields survive the gateway.
             result = json.loads(decode_transport(transport_payload(raw), MAX_AGENT_BYTES))
-            model = ChatResponse if operation == 'chat' else (
+            from app.services.chat_experience import ChatCatalog
+            from app.external_models import ExternalModelConnection, ExternalModelOptions
+            model = ExternalModelOptions if operation == 'discover_models' else ExternalModelConnection if operation == 'connect_model' else ChatCatalog if operation == 'chat_catalog' else ChatResponse if operation in {'chat', 'chat_evaluate'} else (
                 RetailWorkflowResponse if self.audience == 'retail' else SupplierWorkflowResponse)
             validated = model.model_validate(result)
             stage = 'completed'
-            return validated.model_dump(mode='json') if operation == 'chat' else validated
+            return validated.model_dump(mode='json') if operation in {'chat', 'chat_catalog', 'chat_evaluate', 'connect_model', 'discover_models'} else validated
         except HTTPError as exc:
             stage = 'upstream_http_error'
             status = exc.code
             remote_trace = exc.headers.get('X-Trace-ID')
+            external_code = None
+            if status == 503 and operation in {'connect_model', 'discover_models'}:
+                from app.enterprise_ai.external import EXTERNAL_ERROR_MESSAGES
+                try:
+                    code = json.loads(exc.read(4096)).get('error', {}).get('code')
+                    if code in EXTERNAL_ERROR_MESSAGES: external_code = code
+                except Exception:
+                    pass
             exc.close()
+            if external_code:
+                from app.enterprise_ai.external import ExternalModelUnavailable
+                raise ExternalModelUnavailable(external_code) from None
             # Do not relay remote exception text, bodies, URLs, headers or credentials.
             if status == 404:
                 raise CaseNotFound('Workflow not found or expired') from None
@@ -130,6 +145,9 @@ class RemoteWorkflowService:
 
     def select(self, thread_id, selection, *, session):
         return self.client.invoke('select', {'thread_id': str(thread_id), 'selection': data(selection)}, session)
+
+    def change_model(self, thread_id, model_profile, *, session):
+        return self.client.invoke('change_model', {'thread_id': str(thread_id), 'model_profile': model_profile}, session)
 
     def resume(self, thread_id, *, session):
         return self.client.invoke('resume', {'thread_id': str(thread_id)}, session)

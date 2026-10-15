@@ -70,6 +70,9 @@ class MemoryRegistryDatabase:
         if operation == "registry_set_active" and agent_id not in self.rows:
             return False
         now = datetime.now(timezone.utc)
+        # Windows clock ticks can tie across fixture inserts; this test expects creation order.
+        if self.rows:
+            now = max(now, max(row['updated_at'] for row in self.rows.values()) + timedelta(microseconds=1))
         row = ({**parameters, "created_at": now} if operation == "registry_create_agent"
                else {**self.rows[agent_id], **parameters})
         if row["active"] and row["agent_type"] != "CUSTOM":
@@ -118,7 +121,7 @@ def test_both_roles_can_register_list_activate_and_deactivate(api, role):
     assert agent["name"] == "POC agent" and agent["active"] is False
     assert agent["created_at"] and agent["updated_at"]
     assert len(database.rows) == 1
-    assert client.get("/registry/agents", headers=headers).json() == {"items": [agent], "has_more": False}
+    assert client.get("/registry/agents", headers=headers).json() == {"items": [agent], "has_more": False, "enforcement_enabled": False}
     for operation, active in (("activate", True), ("activate", True), ("deactivate", False), ("deactivate", False)):
         response = client.post(f'/registry/agents/{agent["agent_id"]}/{operation}', headers=headers)
         assert response.status_code == 200
@@ -315,7 +318,7 @@ def test_registry_readiness_checks_optional_table_index_and_sql(table_count, ind
     else:
         assert service._inspect_registry() == expected
     if expected == "ready":
-        assert cursor.parse.call_count == 6
+        assert cursor.parse.call_count == 8
     else:
         database._get_pool.assert_not_called()
 

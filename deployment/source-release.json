@@ -1,29 +1,28 @@
 {
-  "recorded_on": "2026-10-10",
+  "recorded_on": "2026-10-15",
   "release_kind": "source_only",
   "source_repository": "https://github.com/ORA-AIMLCOE/retail-inventory-agent",
-  "source_branch": "Deployment_v4",
-  "source_commit": "2f61f6cb7035604a4e42c12f675b1585fca7e453",
-  "destination_branch": "Retail-inventory-deployment",
-  "backend_tracing_source": {
-    "artifact": "backend-langfuse-backend-20260922-v1.tar",
-    "archive_sha256": "a6d991485c3a812f6eb0d8819c2bb09c0eb65e811f31c1c3b87d23b3e5e82f81",
-    "archive_included": false,
-    "changes": "Preserved optional tracing; retained the V4 Responses-only model boundary; added no-send notification status routes."
-  },
+  "source_branch": "V5",
+  "source_commit": "d8d38dc122cbab84b3bf29b3a0ee37513a688335",
+  "destination_branch": "V5-one-click-deployment",
+  "compatibility": [
+    "Five-service source-build contract retained",
+    "Portable public bases and Oracle Thick client retained",
+    "Optional Langfuse and no-send notification diagnostics retained",
+    "Runtime registration inserts missing roles and preserves inactive entries",
+    "Registry enforcement enabled in gateway and agent source targets"
+  ],
   "verification": {
-    "python_tests": 107,
-    "python_subtests": 7,
-    "mocked_chat_browser_tests": 15,
+    "python_tests": 237,
+    "python_subtests": 9,
+    "mocked_browser_tests": 57,
     "frontend_source_build": "passed",
-    "frontend_active_assets_match_original_image": true,
-    "linux_amd64_build_targets": ["backend", "mcp-server", "retail-agent", "supplier-agent", "frontend"],
-    "container_startup_probes_and_pip_check": "passed_with_network_none",
-    "oracle_thick_client_load": "passed_for_all_four_backend_service_images",
     "npm_audit_findings": 0,
-    "policy_seed_consistency": "12_supplier_item_rows_verified_against_4_original_pdfs",
-    "oci_deployment": "not_run_for_this_source_release",
-    "notification_publish": "not_tested",
-    "container_vulnerability_scan": "must_be_run_in_target_registry"
+    "current_dashboard_manifest_and_five_runtime_configurations": "passed_offline",
+    "registry_deactivation_and_reactivation": "passed_offline_for_retail_and_supplier",
+    "image_builds": "not_run_docker_engine_unavailable",
+    "container_smoke_checks": "not_run_docker_engine_unavailable",
+    "oci_deployment": "not_run",
+    "live_notification_publish": "not_tested"
   }
 }

@@ -69,10 +69,24 @@ def test_query_plans_use_only_fixed_parameterized_database_operations(
     assert result == {
         "status": "completed", "dataset": dataset, "row_count": 1,
         "rows": [{"item_id": "ITEM001"}],
+        'query_evidence': {'operation': operation, 'parameters': parameters, 'row_count': 1},
     }
     database.fetch_all.assert_called_once_with(operation, parameters)
     definition = READ_OPERATIONS[QUERY_PLANS[dataset]["operation"]]
     assert definition.kind == "read" and definition.sql.lstrip().upper().startswith("SELECT")
+
+
+def test_query_evidence_uses_actual_server_template_and_rejects_extra_or_secret_binds():
+    from app.query_evidence import QueryEvidence
+    evidence = QueryEvidence(operation='nl2sql_inventory',
+        parameters={'item_id': 'ITEM001', 'sort_by': 'item_id', 'page_size': 5}, row_count=0)
+    assert evidence.display()['sql'] == READ_OPERATIONS['nl2sql_inventory'].sql.strip()
+    for changes in ({'sql': 'DELETE FROM inventory'},
+                    {'parameters': {**evidence.parameters, 'password': 'private-value'}},
+                    {'parameters': {**evidence.parameters, 'item_id': "ITEM001' OR 1=1"}},
+                    {'parameters': {**evidence.parameters, 'page_size': True}}):
+        with pytest.raises(ValueError):
+            QueryEvidence.model_validate({**evidence.model_dump(), **changes})
 
 
 @pytest.mark.parametrize(

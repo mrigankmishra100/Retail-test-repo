@@ -31,7 +31,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     XDG_CACHE_HOME=/tmp/cache \
     FASTMCP_HOME=/tmp/fastmcp \
     APP_ENV=production \
-    OCI_AUTH_MODE=resource_principal
+    OCI_AUTH_MODE=resource_principal \
+    CHAT_METRICS_PATH=/tmp/chat-metrics.sqlite3
 
 WORKDIR /app
 COPY backend/requirements.lock /app/requirements.lock

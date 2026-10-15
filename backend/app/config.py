@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import AliasChoices, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.runtime_config import JsonSettingsMixin
+from app.chat_models import ChatModelProfile
 from app.utils.logger import ensure_logging
 
 ensure_logging()
@@ -34,6 +35,8 @@ class Settings(JsonSettingsMixin, BaseSettings):
 
     enterprise_ai_endpoint: str | None = None
     enterprise_ai_model_id: str | None = None
+    chat_model_profiles: list[ChatModelProfile] = Field(default_factory=list, max_length=12)
+    chat_metrics_path: Path = REPOSITORY_ROOT / 'runtime' / 'chat-metrics.sqlite3'
     enterprise_ai_responses_enabled: bool = False
     enterprise_ai_api_mode: Literal['chat', 'responses'] = 'responses'
     enterprise_ai_auth_mode: Literal['oci', 'genai_api_key'] = 'oci'
@@ -49,6 +52,11 @@ class Settings(JsonSettingsMixin, BaseSettings):
     enterprise_ai_file_search_enabled: bool = False
     enterprise_ai_vector_store_ids: list[str] = Field(default_factory=list)
     enterprise_ai_guardrails_enabled: bool = False
+    enterprise_ai_guardrails_endpoint: str | None = None
+    enterprise_ai_guardrails_version: str = Field(default='1.0.1', pattern=r'^\d+\.\d+\.\d+$')
+    enterprise_ai_guardrails_timeout_seconds: float = Field(default=15, gt=0, le=30)
+    agent_registry_enforcement_enabled: bool = False
+    agent_registry_bootstrap_enabled: bool = False
     enterprise_ai_mcp_safety_enabled: bool = False
     enterprise_ai_agent_registry_enabled: bool = False
     enterprise_ai_mcp_registry_enabled: bool = False
@@ -71,6 +79,11 @@ class Settings(JsonSettingsMixin, BaseSettings):
     langfuse_release: str | None = None
 
     oci_region: str | None = None
+    oci_finops_enabled: bool = False
+    oci_usage_tenancy_id: str | None = None
+    oci_usage_region: str | None = None
+    oci_application_log_id: str | None = Field(default=None, pattern=r'^ocid1\.log\.[a-zA-Z0-9.-]+$')
+    oci_application_log_group_id: str | None = Field(default=None, pattern=r'^ocid1\.loggroup\.[a-zA-Z0-9.-]+$')
     oci_compartment_id: str | None = None
     oci_config_file: str = "~/.oci/config"
     oci_config_profile: str = "DEFAULT"
@@ -117,6 +130,10 @@ class Settings(JsonSettingsMixin, BaseSettings):
     def validate_enabled_integrations(self) -> "Settings":
         """Require configuration only for integrations explicitly enabled."""
         missing: list[str] = []
+        if self.oci_application_log_id and not (self.oci_application_log_group_id and self.oci_compartment_id):
+            raise ValueError('Centralized logging requires its log group and compartment')
+        if len({p.id for p in self.chat_model_profiles}) != len(self.chat_model_profiles):
+            raise ValueError('Chat model profile IDs must be unique')
         from app.agents.remote_contract import validate_agent_endpoint, validate_service_key
         names = {'retail', 'supplier'}
         if set(self.remote_mcp_service_keys) - names:
@@ -206,10 +223,14 @@ class Settings(JsonSettingsMixin, BaseSettings):
             if (self.enterprise_ai_model_id or '').startswith('ocid1.generativeaimodel.'):
                 raise ValueError('Responses requires a supported model name or endpoint OCID, not a native Chat model OCID')
 
+        if self.enterprise_ai_guardrails_enabled:
+            from app.enterprise_ai.guardrails import normalize_guardrails_endpoint
+            self.enterprise_ai_guardrails_endpoint = normalize_guardrails_endpoint(
+                self.enterprise_ai_guardrails_endpoint or f'https://inference.generativeai.{self.oci_region}.oci.oraclecloud.com')
+            missing.extend(self._missing('Guardrails', OCI_COMPARTMENT_ID=self.oci_compartment_id))
         enabled_endpoint_features = {
             "Conversation State": self.enterprise_ai_conversation_state_enabled,
             "NL2SQL": self.enterprise_ai_nl2sql_enabled,
-            "Guardrails": self.enterprise_ai_guardrails_enabled,
             "MCP Safety": self.enterprise_ai_mcp_safety_enabled,
         }
         for feature, enabled in enabled_endpoint_features.items():

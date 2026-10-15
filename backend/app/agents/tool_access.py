@@ -1,6 +1,7 @@
 """Internal trusted tool binding; no session/approval argument enters a public tool schema."""
 from contextvars import ContextVar
 from dataclasses import dataclass
+from app.live_activity import activity_span
 from app.services.cases import CaseService
 
 binding = ContextVar("internal_retail_tool_binding", default=None)
@@ -22,6 +23,13 @@ class RetailToolAccess:
     def call(self, name, **arguments):
         CaseService._session(self.session).require_role("retail-manager")
         if name not in RETAIL_TOOL_NAMES:
+            raise PermissionError("Tool not available to this workflow")
+        with activity_span('tool', name):
+            return self._call(name, **arguments)
+
+    def _call(self, name, **arguments):
+        CaseService._session(self.session).require_role("retail-manager")
+        if name not in RETAIL_TOOL_NAMES:
             raise PermissionError("Tool not available to the retail workflow")
         if getattr(getattr(self.container, 'settings', None), 'remote_mcp_enabled', False):
             from app.mcp.remote import call_remote
@@ -40,6 +48,13 @@ class SupplierToolAccess:
     session: object
 
     def call(self, name, **arguments):
+        CaseService._session(self.session).require_role("supplier")
+        if name not in SUPPLIER_TOOL_NAMES:
+            raise PermissionError("Tool not available to this workflow")
+        with activity_span('tool', name):
+            return self._call(name, **arguments)
+
+    def _call(self, name, **arguments):
         CaseService._session(self.session).require_role("supplier")
         if name not in SUPPLIER_TOOL_NAMES:
             raise PermissionError("Tool not available to the supplier workflow")

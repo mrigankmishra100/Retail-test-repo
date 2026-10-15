@@ -6,7 +6,7 @@ export default function RequestActivity({ session, revision, navigate }) {
   const [offset, setOffset] = useState(0);
   const resource = useResource(() => api.cases(offset), [offset, revision], 15000);
   return (
-    <Panel title="Requests and responses" subtitle="Saved outcomes from your agent conversations. Updates every 15 seconds."
+    <Panel title="Requests and responses" subtitle="Auto-refresh · 15 seconds"
       action={<button disabled={resource.loading} onClick={resource.reload}>Refresh</button>}>
       <ErrorNotice error={resource.error} retry={resource.reload} />
       {resource.loading ? <Loading /> : resource.data && (

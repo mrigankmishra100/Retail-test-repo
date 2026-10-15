@@ -35,3 +35,7 @@ tests
 database
 policies
 *.docx
+
+# Generated local V5 artifacts
+runtime/
+**/*.egg-info/

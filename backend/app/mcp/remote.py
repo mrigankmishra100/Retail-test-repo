@@ -28,11 +28,12 @@ def _mac(token, key):
                     b'retail-mcp-delegation-v1\x00' + token.encode('ascii'), sha256).hexdigest()
 
 
-def assertion(name, arguments, session, key):
+def assertion(name, arguments, session, key, model_binding=None):
     role = 'retail' if session.role == 'retail-manager' else 'supplier'
     envelope = AgentInvocation(audience=role, operation='get', nonce=uuid4(),
         issued_at=int(datetime.now(timezone.utc).timestamp()), session=session,
-        payload={'tool': name, 'arguments_sha256': arguments_digest(arguments)})
+        payload={'tool': name, 'arguments_sha256': arguments_digest(arguments),
+                 **({'model_binding': model_binding} if model_binding else {})})
     envelope.check_identity(role)
     raw = envelope.model_dump_json().encode()
     if len(raw) > 6000:
@@ -50,7 +51,7 @@ def arguments_digest(arguments):
     return sha256(raw).hexdigest()
 
 
-def verify_assertion(value, keys, name, arguments, replay):
+def verify_assertion(value, keys, name, arguments, replay, *, include_model=False):
     try:
         if not isinstance(value, str) or len(value) > 8100:
             raise ValueError()
@@ -64,14 +65,20 @@ def verify_assertion(value, keys, name, arguments, replay):
         # Accept old, fully signed bodies during an MCP-first rolling upgrade.
         expected = {'tool': name, 'arguments_sha256': arguments_digest(arguments)}
         legacy = {'tool': name, 'arguments': arguments}
-        if envelope.operation != 'get' or envelope.payload not in (expected, legacy):
+        payload = dict(envelope.payload)
+        model_binding = payload.pop('model_binding', None)
+        if model_binding is not None and (not isinstance(model_binding, dict) or
+                set(model_binding) != {'profile', 'model_id'} or
+                not all(isinstance(v, str) and 1 <= len(v) <= 256 for v in model_binding.values())):
+            raise ValueError()
+        if envelope.operation != 'get' or payload not in (expected, legacy):
             raise ValueError()
         from app.agents.tool_access import RETAIL_TOOL_NAMES, SUPPLIER_TOOL_NAMES
         allowed = RETAIL_TOOL_NAMES if matched[0] == 'retail' else SUPPLIER_TOOL_NAMES
         if name not in allowed:
             raise ValueError()
         replay.claim(envelope.nonce)
-        return envelope.session
+        return (envelope.session, model_binding) if include_model else envelope.session
     except Exception:
         raise PermissionError('Invalid, expired or replayed MCP delegation') from None
 
@@ -139,7 +146,9 @@ def call_remote(container, session, name, arguments):
         role = 'retail' if session.role == 'retail-manager' else 'supplier'
         metadata['agent'] = role
         arguments = TOOL_FUNCTIONS[name].input_model.model_validate(arguments).model_dump(mode='json')
-        header = assertion(name, arguments, session, settings.remote_mcp_service_keys[role])
+        selection = getattr(container, 'chat_selection', None)
+        model_binding = {k: selection[k] for k in ('profile', 'model_id')} if isinstance(selection, dict) else None
+        header = assertion(name, arguments, session, settings.remote_mcp_service_keys[role], model_binding)
         endpoint = validate_agent_endpoint(settings.remote_mcp_endpoint) + '/mcp'
         logger.info('mcp_remote_started', extra=metadata)
         value = asyncio.run(run())

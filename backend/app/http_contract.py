@@ -28,9 +28,11 @@ MESSAGES = {
 
 
 def error_response(request, status, *, fields=None, headers=None, detail=None):
+    from app.enterprise_ai.external import EXTERNAL_ERROR_MESSAGES
     code, message = MESSAGES.get(status, ("http_error", "Request could not be completed"))
     safe_details = {"policy_unavailable": "The required supplier policy is missing, invalid or unsupported",
                     "publishing_disabled": "Notification publishing is disabled; the approved intent remains queued"}
+    safe_details.update(EXTERNAL_ERROR_MESSAGES)
     if status == 503 and isinstance(detail, dict) and detail.get("code") in safe_details:
         code = detail["code"]
         message = safe_details[code]

@@ -17,7 +17,8 @@ COPY backend/docker/oracle-instantclient.conf /etc/ld.so.conf.d/oracle-instantcl
 RUN ldconfig
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
     XDG_CACHE_HOME=/tmp/cache FASTMCP_HOME=/tmp/fastmcp APP_ENV=production \
-    OCI_AUTH_MODE=resource_principal HOSTED_PROBE_MODE=true ORACLE_DB_DRIVER_MODE=thick
+    OCI_AUTH_MODE=resource_principal HOSTED_PROBE_MODE=true ORACLE_DB_DRIVER_MODE=thick \
+    CHAT_METRICS_PATH=/tmp/chat-metrics.sqlite3
 WORKDIR /app
 COPY backend/requirements.lock /app/requirements.lock
 RUN pip install -r requirements.lock
@@ -34,15 +35,15 @@ USER appuser
 EXPOSE 8080
 
 FROM runtime AS backend
-ENV APPLICATION_ROLE=backend
+ENV APPLICATION_ROLE=backend AGENT_REGISTRY_ENFORCEMENT_ENABLED=true AGENT_REGISTRY_BOOTSTRAP_ENABLED=true
 CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
 
 FROM runtime AS retail-agent
-ENV APPLICATION_ROLE=retail-agent
+ENV APPLICATION_ROLE=retail-agent AGENT_REGISTRY_ENFORCEMENT_ENABLED=true
 CMD ["python", "-m", "uvicorn", "app.agent_main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
 
 FROM runtime AS supplier-agent
-ENV APPLICATION_ROLE=supplier-agent
+ENV APPLICATION_ROLE=supplier-agent AGENT_REGISTRY_ENFORCEMENT_ENABLED=true
 CMD ["python", "-m", "uvicorn", "app.agent_main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
 
 FROM runtime AS mcp-server

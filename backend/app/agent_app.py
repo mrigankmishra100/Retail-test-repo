@@ -56,6 +56,10 @@ class Selection(Thread):
     selection: RetailSelection
 
 
+class ModelSelection(Thread):
+    model_profile: str = Field(min_length=1, max_length=80)
+
+
 class Chat(StrictPayload):
     request: ChatRequest
 
@@ -78,16 +82,32 @@ class ReplayGuard:
 
 def dispatch(container, audience, envelope):
     op, payload, session = envelope.operation, envelope.payload, envelope.session
+    if op in {'connect_model', 'discover_models'}:
+        from app.external_models import ExternalModelInput, ExternalModelDiscoveryInput
+        if audience != 'retail' or set(payload) != {'config'}:
+            raise HTTPException(403, 'Retail model connection required')
+        config = (ExternalModelInput if op == 'connect_model' else ExternalModelDiscoveryInput).model_validate(payload['config'])
+        service = container.chat_experience_service
+        return invoke(service.connect_external if op == 'connect_model' else service.discover_external, config, session=session)
     # No arbitrary function invocation, graph state, approval assertion, SQL or URL.
-    if op == 'chat':
+    if op == 'chat_catalog':
+        if audience != 'retail' or payload:
+            raise HTTPException(403, 'Retail catalog operation required')
+        return invoke(container.chat_experience_service.catalog, session=session)
+    if op in {'chat', 'chat_evaluate'}:
         if audience != 'retail':
             raise HTTPException(403, 'Chat is not a supplier workflow operation')
         request = Chat.model_validate(payload).request
         if (request.intent != 'conversation' or (request.role and request.role != session.role)
                 or (request.session_id and request.session_id != session.session_id)):
             raise HTTPException(403, 'Chat identity or intent mismatch')
-        return invoke(container.retail_conversation_service.respond, request, session=session)
+        return invoke(container.chat_experience_service.respond, request, session=session, evaluation=op == 'chat_evaluate')
     service = container.retail_workflow_service if audience == 'retail' else container.supplier_workflow_service
+    if op == 'change_model':
+        if audience != 'retail':
+            raise HTTPException(403, 'Only the retail workflow selects its model')
+        body = ModelSelection.model_validate(payload)
+        return invoke(service.change_model, str(body.thread_id), body.model_profile, session=session)
     if op == 'start':
         body = (RetailStart if audience == 'retail' else SupplierStart).model_validate(payload)
         return invoke(service.start, body.request, session=session, key=body.key)
@@ -113,6 +133,7 @@ def create_agent_app(settings, container=None):
     @asynccontextmanager
     async def lifespan(app):
         configure_logging()
+        container.central_logs.start()
         app.state.ready = True
         try:
             yield

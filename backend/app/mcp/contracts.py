@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field, field_validator
 from app.contracts import ItemId, SupplierId, Money, CaseResponse, DispatchPending
+from app.query_evidence import QueryEvidence
 
 Days = Annotated[int, Field(strict=True, ge=1, le=365)]
 Quantity = Annotated[int, Field(strict=True, ge=1, le=1_000_000)]
@@ -31,6 +32,7 @@ class RetailQueryResult(BaseModel):
     dataset: RetailDataset
     row_count: int = Field(ge=0, le=50)
     rows: list[dict[str, Any]]
+    query_evidence: QueryEvidence | None = None
 
 
 class EligibleSupplier(BaseModel):

@@ -4,6 +4,7 @@ Object construction is centralized here so FastAPI, MCP tools, and future
 graphs use the same configured boundaries. Constructing the container or any
 of its properties must not initiate network connections.
 """
+from app.live_activity import activity_step
 
 from functools import cached_property, lru_cache
 import logging
@@ -50,7 +51,8 @@ class ApplicationContainer:
             'features': {name: getattr(application_settings, name) for name in (
                 'enterprise_ai_responses_enabled', 'enterprise_ai_api_mode',
                 'enterprise_ai_conversation_state_enabled', 'enterprise_ai_file_search_enabled',
-                'enterprise_ai_nl2sql_enabled', 'remote_mcp_enabled',
+                'enterprise_ai_nl2sql_enabled', 'enterprise_ai_guardrails_enabled',
+                'agent_registry_enforcement_enabled', 'remote_mcp_enabled',
                 'oci_notification_publish_enabled')},
             'status': 'configured_not_probed'})
 
@@ -91,6 +93,8 @@ class ApplicationContainer:
             self.langfuse.close()
         if "readiness_service" in self.__dict__:
             self.readiness_service.close()
+        if 'central_logs' in self.__dict__:
+            self.central_logs.close()
         if "database" in self.__dict__:
             self.database.close()
         if "storage" in self.__dict__:
@@ -140,6 +144,16 @@ class ApplicationContainer:
         return OCIObservabilityClient()
 
     @cached_property
+    def official_costs(self):
+        from app.oci.operations import OfficialCosts
+        return OfficialCosts(self.settings)
+
+    @cached_property
+    def central_logs(self):
+        from app.oci.operations import CentralLogs
+        return CentralLogs(self.settings)
+
+    @cached_property
     def responses(self) -> EnterpriseAIResponsesClient:
         return EnterpriseAIResponsesClient.from_settings(self.settings, observability=self.langfuse)
 
@@ -153,10 +167,7 @@ class ApplicationContainer:
 
     @cached_property
     def guardrails(self) -> EnterpriseAIGuardrailsClient:
-        return EnterpriseAIGuardrailsClient(
-            endpoint=self.settings.enterprise_ai_endpoint,
-            enabled=self.settings.enterprise_ai_guardrails_enabled,
-        )
+        return EnterpriseAIGuardrailsClient.from_settings(self.settings)
 
     @cached_property
     def mcp_safety(self) -> EnterpriseAIMCPSafetyClient:
@@ -180,7 +191,7 @@ class ApplicationContainer:
     @cached_property
     def agent_registry_service(self):
         from app.services.agent_registry import AgentRegistryService
-        return AgentRegistryService(self.database)
+        return AgentRegistryService(self.database, enforcement_enabled=self.settings.agent_registry_enforcement_enabled)
 
     @cached_property
     def langsmith(self) -> LangSmithObservabilityClient:
@@ -242,8 +253,26 @@ class ApplicationContainer:
         from app.agents.remote import RemoteAgentClient
         return RemoteAgentClient(audience=name, endpoint=self.settings.agent_endpoints[name],
             key=self.settings.agent_service_keys[name], timeout=self.settings.agent_timeout_seconds,
-            endpoint_resolver=lambda: self.agent_registry_service.active_endpoint(name)
-                or self.settings.agent_endpoints[name], observability=self.langfuse)
+            endpoint_resolver=lambda: self._resolve_agent_endpoint(name), observability=self.langfuse)
+
+    @activity_step('registry', 'Resolving agent from registry')
+    def _resolve_agent_endpoint(self, name):
+        from app.services.agent_registry import enforce_agent
+        enforce_agent(self, name)
+        from app.chat_telemetry import event
+        registered = self.agent_registry_service.active_endpoint(name)
+        event('agent_mapping', 'registry' if registered else 'configured_endpoint', tool=name)
+        return registered or self.settings.agent_endpoints[name]
+
+    @cached_property
+    def external_models(self):
+        from app.external_models import ExternalModelStore
+        return ExternalModelStore()
+
+    @cached_property
+    def chat_experience_service(self):
+        from app.services.chat_experience import ChatExperienceService
+        return ChatExperienceService(self)
 
     @cached_property
     def remote_retail_agent(self):

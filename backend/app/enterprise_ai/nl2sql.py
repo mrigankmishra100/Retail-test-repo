@@ -91,5 +91,8 @@ class EnterpriseAINL2SQLClient:
         elif dataset == "supplier_options":
             parameters["supplier_id"] = supplier_id
         rows = self.database_client.fetch_all(plan["operation"], parameters)
+        from app.query_evidence import QueryEvidence
+        evidence = QueryEvidence(operation=plan['operation'], parameters=parameters, row_count=len(rows))
         logger.info("Constrained NL2SQL dataset=%s rows=%d", dataset, len(rows))
-        return {"status": "completed", "dataset": dataset, "row_count": len(rows), "rows": rows}
+        return {"status": "completed", "dataset": dataset, "row_count": len(rows), "rows": rows,
+                'query_evidence': evidence.model_dump()}
