@@ -1,13 +1,17 @@
 # V5 one-click deployment test
 
-Updated from V5 source commit `37ded66aa1274f26b177de9dcad6600133d88f1a`.
+Updated from V5 source commit `f81835afaaebc02b0edbf8c1bd4555df71ad9397`.
 Includes OpenAI/Anthropic/Gemini model catalogs, persistent in-chat workflow-step
 snapshots and MCP control events. Existing optional Langfuse tracing, portable
 source images and runtime registration are preserved. Reviewed dashboard commit:
-`eb4489372bd4f0c6839e12f0b36bd1cfe1589082` on `Deployment_optimized`.
+`4900f90ca3cae3f40634c39169e52694762f81ed` on `Deployment_optimized`.
 The current dashboard recipe explicitly disables OCI ApplyGuardrails and enables
 NL2SQL for Retail/MCP; adjust the deployment recipe if different flags are needed.
-Container builds and a live OCI deployment still need to be tested on the VM.
+All five Linux/amd64 source images passed the latest dashboard's settings
+preflight, permission/region overlays, and startup checks through its optional
+runtime-access wrapper. These tests used synthetic configuration, networking
+disabled, read-only containers and UID 65532. Live OCI deployment and IAM access
+still require validation by the dashboard during your deployment.
 
 Source: https://github.com/mrigankmishra100/Retail-test-repo/tree/V5-one-click-deployment
 
@@ -16,6 +20,38 @@ The manifest is `deployment/source-build.json`; backend services build from
 `backend/Dockerfile.source`, and the frontend from `frontend/Dockerfile`.
 Historical image manifests in this repository are not the release selection for
 this source branch. Do not select old image archives or the private-base Dockerfiles.
+
+## Compatibility with the reviewed dashboard
+
+- The exact five-service manifest, build targets and runtime module entrypoints
+  remain compatible with `Deployment_optimized` at the commit above.
+- Responses accepts both canonical project OCID regions and SDK aliases such as
+  `hyd`. The actual project OCID is preserved; wrong-region projects are rejected.
+  The validator matches the dashboard's reviewed replacement fingerprint.
+- Images normalize public Python code and frontend assets to readable modes even
+  when the VM checkout uses umask 0077. Runtime secrets and wallet files are outside
+  this normalization. Images retain their non-root `appuser` default.
+- The dashboard can add its authenticated runtime-access wrapper. Startup, health,
+  readiness and unauthenticated rejection were tested through that wrapper.
+  The test did not execute its cloud access or model-inference probes.
+- Database schema and policy documents match the dashboard's bundled assets.
+  The seed data matches; only a SQL comment differs.
+
+Update the installed Deployment Studio separately to that reviewed revision (or
+recheck a newer revision). Updating this app branch does not update the dashboard
+running on your VM. The dashboard's source review pins a commit: start a new source
+inspection/deployment to pick up this branch's latest code rather than resuming an
+older pinned build.
+
+To recheck configuration compatibility against a local dashboard checkout:
+
+```powershell
+python scripts/check_dashboard_compatibility.py --dashboard-root "C:\path\to\Deployment_Automation" --region ap-hyderabad-1
+```
+
+Use the app's installed Python environment. This runs the dashboard's real
+manifest validator and settings preflight with synthetic canonical/short-region
+configurations for all five services; it makes no database, model or OCI calls.
 
 ## Deployment and registration responsibilities
 
@@ -107,7 +143,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed' }
 python scripts/smoke_source_images.py --prefix retail-v5-source-validation
 ```
 
-The smoke checker runs read-only containers with networking disabled, checks
+The smoke checker runs read-only containers as UID 65532 with networking disabled, checks
 startup/health/readiness, the unsigned-agent boundary, no-send notification
 diagnostics, dependencies and Oracle Thick client loading. It does not prove
 live OCI permissions or connectivity. Builds need Docker Hub, Debian, PyPI, npm

@@ -27,6 +27,9 @@ COPY backend/pyproject.toml /app/pyproject.toml
 RUN pip install --no-deps . && useradd --create-home --uid 10001 appuser \
     && chown -R appuser:appuser /app \
     && python -c "import oracledb; oracledb.init_oracle_client(); assert not oracledb.is_thin_mode()"
+# Public code/assets must also be readable when OCI selects another runtime UID.
+COPY --chmod=0644 backend/docker/normalize_image_permissions.py /app/normalize_image_permissions.py
+RUN python -B /app/normalize_image_permissions.py backend
 ARG SOURCE_REVISION
 ARG RELEASE_TAG=source-build
 LABEL org.opencontainers.image.revision=${SOURCE_REVISION} org.opencontainers.image.version=${RELEASE_TAG}

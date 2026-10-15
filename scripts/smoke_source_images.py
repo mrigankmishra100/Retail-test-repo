@@ -45,7 +45,7 @@ print(json.dumps({"service": role, "startup_and_probes": "passed", "cloud_access
 
 for service in ("backend", "mcp-server", "retail-agent", "supplier-agent", "frontend"):
     command = [args.docker, "run", "--rm", "--network", "none", "--read-only",
-               "--tmpfs", "/tmp:rw,nosuid,size=128m", "--cap-drop", "ALL",
+               "--user", "65532:65532", "--tmpfs", "/tmp:rw,nosuid,size=128m", "--cap-drop", "ALL",
                "--security-opt", "no-new-privileges", "--memory", "1g", "--cpus", "1", "-i"]
     variables = {
         "APP_ENV": "development", "OCI_AUTH_MODE": "api_key", "SMOKE_ROLE": service,
@@ -61,4 +61,4 @@ for service in ("backend", "mcp-server", "retail-agent", "supplier-agent", "fron
         print(result.stdout)
         print(result.stderr)
         raise SystemExit(f"Container smoke check failed: {service}")
-    print(json.dumps({"service": service, "startup_and_probes": "passed", "network": "none"}), flush=True)
+    print(json.dumps({"service": service, "startup_and_probes": "passed", "network": "none", "runtime_uid": 65532}), flush=True)

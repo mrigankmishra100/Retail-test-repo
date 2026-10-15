@@ -3,26 +3,32 @@
   "release_kind": "source_only",
   "source_repository": "https://github.com/ORA-AIMLCOE/retail-inventory-agent",
   "source_branch": "V5",
-  "source_commit": "37ded66aa1274f26b177de9dcad6600133d88f1a",
+  "source_commit": "f81835afaaebc02b0edbf8c1bd4555df71ad9397",
   "destination_branch": "V5-one-click-deployment",
   "compatibility": [
     "Five-service source-build contract retained",
     "Portable public bases and Oracle Thick client retained",
     "Optional Langfuse and no-send notification diagnostics retained",
     "Runtime registration inserts missing roles and preserves inactive entries",
-    "Registry enforcement enabled in gateway and agent source targets"
+    "Registry enforcement enabled in gateway and agent source targets",
+    "Canonical and short OCI project regions match the dashboard-reviewed validator",
+    "Public image source/assets readable by hosted runtime UID 65532",
+    "Latest permission, region and authenticated runtime-probe overlays validated",
+    "Bundled database schema and supplier policy documents match"
   ],
   "verification": {
-    "python_tests": 215,
-    "python_subtests": 9,
-    "mocked_browser_tests": 52,
-    "frontend_source_build": "passed",
-    "current_dashboard_manifest_and_five_runtime_configurations": "passed_offline",
+    "focused_app_python_tests": 125,
+    "focused_dashboard_python_tests": 139,
+    "dashboard_tests_skipped": 2,
+    "current_dashboard_manifest_and_five_runtime_configurations": "passed_offline_10_cases",
     "registry_deactivation_and_reactivation": "passed_offline_for_retail_and_supplier",
-    "image_builds": "not_run_docker_engine_unavailable",
-    "container_smoke_checks": "not_run_docker_engine_unavailable",
-    "oci_deployment": "not_run",
-    "live_notification_publish": "not_tested"
+    "frontend_source_build": "passed_in_linux_container",
+    "image_builds": "passed_all_five_linux_amd64",
+    "container_smoke_checks": "passed_all_five_network_none_read_only_uid_65532",
+    "dashboard_runtime_wrapper": "passed_all_five_startup_health_and_unauthenticated_probe_rejection",
+    "oci_deployment": "not_run_for_this_compatibility_review",
+    "live_notification_publish": "not_tested",
+    "docker_save": "passed_all_five_images_exported_to_discard_sink"
   },
-  "dashboard_commit": "eb4489372bd4f0c6839e12f0b36bd1cfe1589082"
+  "dashboard_commit": "4900f90ca3cae3f40634c39169e52694762f81ed"
 }

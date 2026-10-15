@@ -43,6 +43,9 @@ RUN pip install --no-deps . \
     && useradd --create-home --uid 10001 appuser \
     && chown -R appuser:appuser /app
 COPY --from=build /app/dist /app/static
+# Public code/assets must also be readable when OCI selects another runtime UID.
+COPY --chmod=0644 backend/docker/normalize_image_permissions.py /app/normalize_image_permissions.py
+RUN python -B /app/normalize_image_permissions.py frontend
 ENV BACKEND_AUTH_MODE=none FRONTEND_STATIC_DIR=/app/static BACKEND_API_CONTRACT=integrated
 
 USER appuser

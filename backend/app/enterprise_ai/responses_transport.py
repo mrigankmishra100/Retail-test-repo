@@ -28,13 +28,19 @@ def validate_genai_key(secret):
 
 
 def normalize_endpoint(endpoint, project_id):
+    import re
+    from urllib.parse import urlsplit
+    from oci.regions import REGIONS_SHORT_NAMES
+
     parsed = urlsplit(endpoint or "")
     match = re.fullmatch(r"inference\.generativeai\.([a-z]+(?:-[a-z]+)+-\d+)\.oci\.oraclecloud\.com", parsed.netloc)
     if (parsed.scheme != "https" or not match or parsed.query or parsed.fragment
             or parsed.path.rstrip("/") not in {"", "/openai/v1"}):
         raise ValueError("Responses requires an OCI regional inference HTTPS endpoint")
-    if not re.fullmatch(r"ocid1\.generativeaiproject\.oc1\." + re.escape(match[1]) + r"\.[A-Za-z0-9]+", project_id or ""):
+    project = re.fullmatch(r"ocid1\.generativeaiproject\.oc1\.([a-z0-9-]+)\.[A-Za-z0-9]+", project_id or "")
+    if not project or REGIONS_SHORT_NAMES.get(project[1], project[1]) != match[1]:
         raise ValueError("Responses project must belong to the endpoint region")
+    # Normalize only for comparison. The caller's real project OCID stays unchanged.
     return f"https://{parsed.netloc}/openai/v1"
 
 
