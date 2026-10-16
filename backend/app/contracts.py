@@ -275,7 +275,7 @@ class PolicyResponse(BaseModel):
 
 class ChatRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    message: str = Field(min_length=1, max_length=4000)
+    message: str = Field(min_length=1, max_length=12000)
     model_profile: str | None = Field(default=None, pattern=r'^[a-zA-Z0-9_.-]{1,80}$')
     use_file_search: bool | None = None
     intent: Literal["help", "inventory_risks", "supplier_quote", "case_status", "conversation"] = "help"

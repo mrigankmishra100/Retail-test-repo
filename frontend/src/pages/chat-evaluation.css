@@ -262,3 +262,18 @@
 
 .langfuse-tracing { margin-top: 20px; padding: 18px; border: 1px solid #e4e4e7; border-radius: 8px; background: #fff; }
 .langfuse-tracing p { font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+
+/* Keep comparison answers prominent and detailed diagnostics optional. */
+.comparison-model-actions { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; }
+.comparison-model-actions h3 { margin: 0; font-size: 18px; }
+.comparison-model-actions p { margin: 6px 0 0; color: #716a62; font-size: 13px; }
+.chat-evaluation .comparison-model-actions select { width: auto; max-width: 220px; }
+.comparison-options { border-top: 1px solid #e5e0da; padding: 14px 0; margin-top: 18px; }
+.comparison-options > summary, .comparison-evidence > summary { color: #725c4f; cursor: pointer; font-size: 13px; }
+.comparison-evidence { border-top: 1px solid #e8e2da; }
+.comparison-evidence > summary { padding: 16px 18px; }
+.comparison-results { align-items: start; }
+.comparison-answer { max-height: none; overflow: visible; }
+.comparison-card header { background: #fcfbf9; }
+.comparison-card .eyebrow { font-size: 10px; color: #82786d; }
+@media (max-width: 650px) { .comparison-model-actions { align-items: flex-start; flex-direction: column; } }

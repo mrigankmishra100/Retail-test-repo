@@ -1,0 +1,8 @@
+{
+  "LANGFUSE_TRACING_ENABLED": true,
+  "LANGFUSE_BASE_URL": "http://150.136.235.10:3000",
+  "LANGFUSE_PUBLIC_KEY": "<shared-project-public-key>",
+  "LANGFUSE_SECRET_KEY": "<shared-project-secret-key>",
+  "LANGFUSE_ENVIRONMENT": "poc",
+  "LANGFUSE_RELEASE": "v5-shared-langfuse"
+}

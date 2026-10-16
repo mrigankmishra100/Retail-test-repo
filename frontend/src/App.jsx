@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import api, { setToken } from './api';
 import { modules } from './modules';
 import { Badge, ErrorNotice, Icon, Loading, useAction, useResource } from './ui';
@@ -7,6 +7,9 @@ import AgentChat from './pages/AgentChat';
 import RequestActivity from './pages/RequestActivity';
 import EvaluationPage from './pages/EvaluationPage';
 import AgentRegistry from './pages/AgentRegistry';
+
+import { newSessionChat, readSessionChats, saveSessionChats, clearSessionChats } from './session-chats';
+import { hasRunningActivity } from './activity-client';
 
 const SESSION = 'retail.session.v1';
 function readSession() {
@@ -156,7 +159,7 @@ export default function App() {
         setSession({ ...saved, ...verified });
       } catch (e) {
         if (e.status !== 401) setRestoreError(e);
-        else sessionStorage.removeItem(SESSION);
+        else { sessionStorage.removeItem(SESSION); clearSessionChats(); }
         setToken(null);
       }
     }
@@ -166,6 +169,7 @@ export default function App() {
     restore();
     const expire = () => {
       sessionStorage.removeItem(SESSION);
+      clearSessionChats();
       setToken(null);
       setSession(null);
       setExpired(true);
@@ -182,6 +186,7 @@ export default function App() {
   async function logout() {
     await api.logout();
     sessionStorage.removeItem(SESSION);
+    clearSessionChats();
     setToken(null);
     setSession(null);
   }
@@ -213,6 +218,32 @@ function Workspace({ session, onLogout }) {
       sessionStorage.getItem(`retail.thread.${session.session_id}`),
     ),
     [revision, setRevision] = useState(0);
+  const [chatsState, setChatsState] = useState(() => readSessionChats(session.session_id));
+  const [chatStorageFull, setChatStorageFull] = useState(false);
+  const currentChat = chatsState.chats.find(chat => chat.id === chatsState.activeId);
+  const saveChat = useCallback((id, snapshot) => {
+    setChatsState(state => ({ ...state, chats: state.chats.map(chat => chat.id === id
+      ? { ...chat, title: snapshot.messages.find(m => m.role === 'user')?.message.slice(0, 70) || chat.title, snapshot }
+      : chat) }));
+  }, []);
+  useEffect(() => {
+    setChatStorageFull(!saveSessionChats(session.session_id, chatsState));
+  }, [session.session_id, chatsState]);
+  function openChat(id) {
+    if (currentChat.snapshot.busy || hasRunningActivity()) return;
+    const chat = chatsState.chats.find(entry => entry.id === id);
+    setChatTarget(null);
+    saveThread(chat.snapshot.thread || null);
+    setChatsState(state => ({ ...state, activeId: id }));
+    navigate('assistant');
+  }
+  function createChat() {
+    if (currentChat.snapshot.busy || hasRunningActivity()) return;
+    const chat = newSessionChat();
+    setChatTarget(null); saveThread(null);
+    setChatsState(state => ({ activeId: chat.id, chats: [...state.chats, chat] }));
+    navigate('assistant');
+  }
   const logout = useAction();
   const health = useResource(api.health, []);
   const retail = session.role === 'retail-manager';
@@ -341,6 +372,14 @@ function Workspace({ session, onLogout }) {
             </button>
           ))}
         </nav>
+        <section className="session-chat-list" aria-label="Session chats">
+          <div className="session-chat-heading"><span>Session chats</span><button aria-label="Start new session chat" title="New chat" disabled={currentChat.snapshot.busy} onClick={createChat}>+</button></div>
+          <div className="session-chat-items">{[...chatsState.chats].reverse().map(chat => <button key={chat.id}
+            className={chat.id === chatsState.activeId && page === 'assistant' ? 'selected' : ''}
+            aria-current={chat.id === chatsState.activeId && page === 'assistant' ? 'true' : undefined}
+            title={chat.title} disabled={currentChat.snapshot.busy} onClick={() => openChat(chat.id)}>{chat.title}</button>)}</div>
+          {chatStorageFull && <small role="status">Browser storage is full. Chats remain available until this page is closed or reloaded.</small>}
+        </section>
         <div className="sidebar-bottom">
           <div className="connection">
             <span className={`dot ${health.data ? 'online' : ''}`} />
@@ -385,7 +424,7 @@ function Workspace({ session, onLogout }) {
         {page === 'activity' && <RequestActivity {...shared} />}
         {page === 'agent-registry' && <AgentRegistry />}
         <div className="chat-page-slot" hidden={page !== 'assistant'}>
-          <AgentChat {...shared} active={page === 'assistant'} />
+          <AgentChat key={currentChat.id} {...shared} chatId={currentChat.id} initialChat={currentChat.snapshot} onSaveChat={saveChat} onNewChat={createChat} active={page === 'assistant'} />
         </div>
         {retail && <div hidden={page !== 'evaluation'}>
           <EvaluationPage session={session} active={page === 'evaluation'} navigate={navigate} />

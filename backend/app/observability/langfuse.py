@@ -174,7 +174,7 @@ class LangfuseObservabilityClient:
                 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
                 session = requests.Session()
-                session.proxies = {"http": self.http_proxy}
+                session.proxies = {"http": self.http_proxy, "https": self.http_proxy}
                 auth = base64.b64encode(
                     f"{self.public_key}:{self.secret_key}".encode("utf-8")
                 ).decode("ascii")
@@ -230,11 +230,21 @@ class LangfuseObservabilityClient:
         try:
             yield observation
         except BaseException as exc:
-            observation.update(level="ERROR", status_message=type(exc).__name__,
-                               metadata={"status": "failed", "error_type": type(exc).__name__})
+            # SDK context managers can record exception messages and traceback
+            # events without applying our input/output mask. Export only the
+            # exception type and status; preserve the original application error.
             try:
-                manager.__exit__(type(exc), exc, exc.__traceback__)
-            except Exception:
+                from langgraph.errors import GraphInterrupt
+                waiting = isinstance(exc, GraphInterrupt)
+                observation.update(level="DEFAULT" if waiting else "ERROR",
+                                   status_message=type(exc).__name__,
+                                   metadata={"status": "waiting" if waiting else "failed",
+                                             "error_type": type(exc).__name__})
+            except BaseException:
+                logger.warning("Langfuse error update failed; application error preserved")
+            try:
+                manager.__exit__(None, None, None)
+            except BaseException:
                 logger.warning("Langfuse observation close failed; application error preserved")
             raise
         else:

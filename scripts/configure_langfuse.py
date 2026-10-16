@@ -13,7 +13,11 @@ def configure(config, values):
     required = ('LANGFUSE_BASE_URL', 'LANGFUSE_PUBLIC_KEY', 'LANGFUSE_SECRET_KEY')
     if any(not isinstance(values.get(key), str) or not values[key].strip() for key in required):
         raise ValueError('Supply LANGFUSE_BASE_URL, LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY')
-    url = urlsplit(values['LANGFUSE_BASE_URL'])
+    endpoint = values['LANGFUSE_BASE_URL'].strip()
+    if any(char.isspace() for char in endpoint):
+        raise ValueError('Use a Langfuse URL without whitespace')
+    url = urlsplit(endpoint)
+    url.port  # Reject invalid ports before preparing a deployment configuration.
     if (url.scheme not in {'http', 'https'} or not url.hostname or url.username is not None
             or url.password is not None or url.query or url.fragment):
         raise ValueError('Use an HTTP(S) Langfuse URL without credentials, query or fragment')
@@ -44,7 +48,7 @@ def main():
     args = parser.parse_args()
     from dotenv import dotenv_values
     result = configure(json.loads(args.config.read_text(encoding='utf-8-sig')),
-                       dotenv_values(args.langfuse_env))
+                       dotenv_values(args.langfuse_env, encoding='utf-8-sig', interpolate=False))
     # Exclusive create: never silently replace a deployment configuration.
     with args.output.open('x', encoding='utf-8') as output:
         json.dump(result, output, indent=2)

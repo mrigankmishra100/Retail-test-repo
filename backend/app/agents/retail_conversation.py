@@ -16,7 +16,7 @@ READ_ONLY_TOOLS = frozenset({"get_inventory_risk", "get_item_sales_history", "qu
                             "get_suppliers_for_item", "get_supplier_policy", "draft_supplier_email", "get_approved_memory"})
 MAX_MODEL_CALLS = 4
 MAX_TOOL_CALLS = 8
-MAX_CONTEXT_CHARS = 100_000
+MAX_CONTEXT_CHARS = 160_000
 
 CONVERSATION_RULES = """
 This conversation is advisory and READ ONLY. You cannot create, select, approve,

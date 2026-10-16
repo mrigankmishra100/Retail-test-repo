@@ -304,3 +304,20 @@ def test_model_estimate_survives_unknown_file_search_fee_and_preserves_rates():
     assert result['estimated_rates']['input_usd_per_million'] == 2
     trace.record({}, 50, error=True)
     assert trace.finish('failed')['model_cost_usd'] is None
+
+
+def test_long_demonstration_prompt_and_recent_context_budget():
+    from pydantic import ValidationError
+    assert len(ChatRequest(message='x' * 12000).message) == 12000
+    with pytest.raises(ValidationError):
+        ChatRequest(message='x' * 12001)
+    history = {'messages': [{'role': role, 'content': f'{turn}:' + 'x' * 10000}
+                            for turn in range(10) for role in ('user', 'assistant')]}
+    recent = RetailConversationService._model_history(history)
+    assert [m['role'] for m in recent] == ['user', 'assistant'] * 2
+    assert recent[0]['content'].startswith('8:')
+    assert recent[-1]['content'].startswith('9:')
+    assert len(history['messages']) == 20
+    short_history = {'messages': [{'role': role, 'content': str(turn)}
+                                  for turn in range(10) for role in ('user', 'assistant')]}
+    assert len(RetailConversationService._model_history(short_history)) == 20

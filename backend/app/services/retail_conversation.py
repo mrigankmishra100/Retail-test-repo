@@ -1,4 +1,5 @@
 """Session-owned Oracle chat history with bounded read-only AI routing."""
+import json
 import logging
 import re
 from time import monotonic
@@ -74,7 +75,7 @@ class RetailConversationService:
         try:
             result = RetailToolAccess(self.container, session).call(
                 "get_chat_history", conversation_id=conversation_id,
-                workflow_thread_id=workflow_id, limit=8)
+                workflow_thread_id=workflow_id, limit=20)
             logger.info('chat_history_loaded', extra={'conversation_id': conversation_id,
                 'status': 'success', 'duration_ms': round((monotonic()-started)*1000, 2)})
             return result
@@ -109,8 +110,22 @@ class RetailConversationService:
 
     @staticmethod
     def _model_history(history):
-        return [{"role": message["role"], "content": message["content"]}
-                for message in history["messages"]]
+        # Keep recent complete exchanges without allowing a long session to fill
+        # the request budget. Oracle and the UI retain the full conversation.
+        exchanges = []
+        for message in history["messages"]:
+            if message["role"] == "user":
+                exchanges.append([])
+            if exchanges:
+                exchanges[-1].append({"role": message["role"], "content": message["content"]})
+        selected, size = [], 0
+        for exchange in reversed(exchanges):
+            cost = len(json.dumps(exchange))
+            if size + cost > 60_000:
+                break
+            selected.insert(0, exchange)
+            size += cost
+        return [message for exchange in selected for message in exchange]
 
     def explain(self, *, session, facts):
         if not self.container.responses.enabled:

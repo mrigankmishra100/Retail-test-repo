@@ -148,8 +148,7 @@ test('retail: assessment, supplier selection, exact-draft approval and dispatch 
   await expect(page.getByRole('heading', { name: 'Retail agent', exact: true })).toBeVisible();
   await page.reload();
   await page.getByRole('button', { name: 'Agent Chat', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Request review in chat' })).toHaveCount(0);
-  await page.getByRole('button', { name: /Continue saved request/ }).click();
+  await expect(page.getByRole('region', { name: 'Supplier selected', exact: true })).toContainText('Fresh Supply');
   await expect(page.getByRole('region', { name: 'Request review in chat' })).toContainText('Awaiting supplier approval');
 });
 
@@ -281,5 +280,74 @@ test('workflow context is opt-in and new chat clears model context, not the save
   const general = await ask();
   expect(general.workflow_thread_id).toBeUndefined();
   expect(general.conversation_id).toBeUndefined();
-  await expect(page.getByRole('button', { name: /Continue saved request/ })).toBeVisible();
+  await page.getByRole('region', { name: 'Session chats' }).getByRole('button', { name: 'Start a replenishment assessment', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Review draft and terms' })).toBeVisible();
+});
+
+
+test('session chats restore transcripts, conversation IDs and activity after switching and reload', async ({ page }, info) => {
+  const state = await setup(page);
+  await page.getByRole('button', { name: 'Agent Chat', exact: true }).click();
+  const ask = async text => {
+    await page.getByLabel('Message to agent').fill(text);
+    await page.getByRole('button', { name: 'Send message', exact: true }).click();
+    await expect(page.getByLabel('Message to agent')).toBeEnabled();
+  };
+  await ask('Show stock coverage');
+  await expect(page.getByRole('log')).toContainText('ITEM001 needs review');
+  await expect(page.locator('.chat-activity-run > summary')).toContainText('Finished');
+  await page.getByRole('button', { name: 'New chat', exact: true }).click();
+  await ask('Explain payment terms');
+  expect(state.calls.filter(c => c.path === '/chat').at(-1).body.conversation_id).toBeUndefined();
+  const sidebar = page.getByRole('region', { name: 'Session chats' });
+  await sidebar.getByRole('button', { name: 'Show stock coverage', exact: true }).click();
+  await expect(page.getByRole('log')).toContainText('Show stock coverage');
+  await expect(page.getByRole('log')).not.toContainText('Explain payment terms');
+  await expect(page.locator('.chat-activity-run')).toHaveCount(1);
+  await page.reload();
+  await expect(page.getByRole('log')).toContainText('Show stock coverage');
+  await expect(page.locator('.chat-activity-run > summary')).toContainText('Finished');
+  await ask('What should I review next?');
+  expect(state.calls.filter(c => c.path === '/chat').at(-1).body.conversation_id).toBe('conversation-1');
+  await page.screenshot({ path: info.outputPath('session-chats.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Toggle navigation', exact: true }).click();
+  await sidebar.getByRole('button', { name: 'Explain payment terms', exact: true }).click();
+  await expect(page.getByRole('log')).toContainText('Explain payment terms');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+});
+
+test('long chats keep more than sixty messages and accept longer prompts', async ({ page }) => {
+  await setup(page);
+  await page.getByRole('button', { name: 'Agent Chat', exact: true }).click();
+  for (let i = 0; i < 32; i++) {
+    await page.getByLabel('Message to agent').fill('hello');
+    await page.getByRole('button', { name: 'Send message', exact: true }).click();
+  }
+  await expect(page.getByRole('log').locator('article.message')).toHaveCount(64);
+  await expect(page.getByLabel('Message to agent')).toHaveAttribute('maxlength', '12000');
+  await page.reload();
+  await expect(page.getByRole('log').locator('article.message')).toHaveCount(64);
+});
+
+
+test('in-flight answers keep chat switching locked and logout clears session transcripts', async ({ page }) => {
+  await setup(page);
+  await page.getByRole('button', { name: 'Agent Chat', exact: true }).click();
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  await page.route('**/api/chat', async route => {
+    await pending;
+    await route.fulfill({ json: { message: 'Finished safely.', conversation_id: 'conversation-1' } });
+  });
+  await page.getByLabel('Message to agent').fill('Check inventory');
+  await page.getByRole('button', { name: 'Send message', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'New chat', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Start new session chat', exact: true })).toBeDisabled();
+  release();
+  await expect(page.getByRole('log')).toContainText('Finished safely.');
+  await expect(page.getByRole('button', { name: 'New chat', exact: true })).toBeEnabled();
+  await page.route('**/api/sessions/me', route => route.fulfill({ json: {} }));
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => Object.keys(sessionStorage).filter(k => k.startsWith('retail.chats.v1.')))).toEqual([]);
 });

@@ -131,7 +131,7 @@ export default function ChatEvaluation({ catalog, active, refreshKey, sessionId,
     <ErrorNotice error={history.error} retry={history.reload} />
     <div id="eval-view-overview" role="tabpanel" aria-labelledby="eval-tab-overview" hidden={tab !== 'overview'}>
     <div className="evaluation-subheading"><div><h3>Session performance</h3><p>Measured usage and execution outcomes across your recorded runs.</p></div><button onClick={history.reload}>Refresh metrics</button></div>
-    <div className="evaluation-section-label"><span>SESSION OVERVIEW</span><span>OCI Responses <span aria-hidden="true">/</span> Performance</span></div>
+
     <div className="session-metrics-grid" aria-label="Session performance metrics">
       <article><span>Reported tokens</span><strong>{count(summary.tokens)}</strong><small>{summary.missingUsage} runs missing complete usage</small></article>
       <article><span>Recorded tool calls</span><strong>{count(summary.toolCalls)}</strong><small>Function and built-in tool execution events</small></article>
@@ -149,7 +149,7 @@ export default function ChatEvaluation({ catalog, active, refreshKey, sessionId,
       {!canEvaluate && <p className="evaluation-notice">Connect an external model or configure OCI models to enable comparison.</p>}
       <form onSubmit={start}>
         <fieldset disabled={Boolean(busy)} aria-label="Models to compare (select two or three)">
-        <div className="comparison-model-actions"><select aria-label="Add comparison model" value="" onChange={(event) => { if (event.target.value === 'external') setExternalDialog(true); }}>
+        <div className="comparison-model-actions"><div><h3>Choose models</h3><p>Select two or three to compare the same prompt.</p></div><select aria-label="Add comparison model" value="" onChange={(event) => { if (event.target.value === 'external') setExternalDialog(true); }}>
           <option value="">Add model…</option><option value="external">External model…</option>
         </select></div><div className="model-choices">
           {models.map((m) => <label key={m.id} title={m.model_id}><input type="checkbox" aria-label={m.label} checked={selected.includes(m.id)}
@@ -164,8 +164,8 @@ export default function ChatEvaluation({ catalog, active, refreshKey, sessionId,
           <details className="comparison-contract"><summary>Same prompt · Fresh context · Read-only tools</summary><p>Each model chooses its own tool calls. Compare completed answers and execution evidence before adopting a replacement.</p></details>
           <div className="evaluation-scenarios"><span>Prompt starters</span><button type="button" onClick={() => setPrompt('Which items are at risk of a stockout, and what should I review next?')}>Inventory overview</button><button type="button" onClick={() => setPrompt('Using current inventory and available supplier data, identify up to three items with the most urgent stockout risk. For each, compare stock coverage with supplier lead time, quantify any gap using returned data, and recommend a priority and next action. Explain trade-offs and identify missing information rather than inventing values. Return a comparison table followed by a concise recommendation. Keep recommendations advisory and read-only.')}>Multi-constraint analysis</button></div>
           <label className="eval-field">Evaluation prompt<textarea rows="3" required maxLength="4000" value={prompt} onChange={(e) => setPrompt(e.target.value)} /></label>
-          <div className="evaluation-options"><label className="eval-field">Expected terms (optional, comma separated)<input value={terms} maxLength="1000" onChange={(e) => setTerms(e.target.value)} placeholder="e.g. stockout, coverage, review" /></label>
-            <label className="eval-rag" title={!canRag ? 'Requires Responses-compatible models and configured vector stores for every selected model.' : undefined}><input type="checkbox" disabled={!canRag} checked={rag && canRag} onChange={(e) => setRag(e.target.checked)} /> Built-in File Search / RAG</label></div>
+          <details className="comparison-options"><summary>Evaluation options</summary><div className="evaluation-options"><label className="eval-field">Expected terms (optional, comma separated)<input value={terms} maxLength="1000" onChange={(e) => setTerms(e.target.value)} placeholder="e.g. stockout, coverage, review" /></label>
+            <label className="eval-rag" title={!canRag ? 'Requires Responses-compatible models and configured vector stores for every selected model.' : undefined}><input type="checkbox" disabled={!canRag} checked={rag && canRag} onChange={(e) => setRag(e.target.checked)} /> Built-in File Search / RAG</label></div></details>
         </fieldset>
         <div className="evaluation-submit"><button className="primary" disabled={Boolean(busy) || selected.length < 2 || !canEvaluate}>{busy && <span className="evaluation-spinner" aria-hidden="true" />}{busy ? 'Running comparison…' : 'Run comparison'}{!busy && <span aria-hidden="true">→</span>}</button><span>Fresh context for each model · Model calls may incur charges</span></div>
       </form>
@@ -187,7 +187,7 @@ export default function ChatEvaluation({ catalog, active, refreshKey, sessionId,
         const profileId = m?.profile_id || result.profile_id || job.model_profiles?.[i];
         const name = profileId === regionalId ? job.regional_model?.label || regional.label : models.find((p) => p.id === profileId)?.label || profileId;
         return <article className="comparison-card" key={profileId || i}><header><span className="eyebrow">MODEL {i + 1}</span><h3>{name}</h3></header>
-          <Markdown className="comparison-answer">{result.message}</Markdown><RunMetrics metrics={m} />
+          <Markdown className="comparison-answer">{result.message}</Markdown><details className="comparison-evidence"><summary>Execution details &amp; sources</summary><RunMetrics metrics={m} /></details>
           {m?.quality && <div className="quality-checks"><b>Quality checks</b>
             <p>Tool success: {m.quality.tools_succeeded == null ? 'No tools called' : m.quality.tools_succeeded ? 'Passed' : 'Failed'} · Citations: {m.citations?.length || 0}</p>
             {m.quality.expected_terms?.length > 0 && <ul>{m.quality.expected_terms.map((t) => <li key={t.term}>{t.found ? '✓' : '—'} {t.term}</li>)}</ul>}

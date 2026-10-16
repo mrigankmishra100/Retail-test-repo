@@ -4,7 +4,8 @@ const listeners = new Set();
 const recent = new Map();
 let generation = 0;
 let timelineOrder = 0;
-export const nextTimelineOrder = () => ++timelineOrder;
+export const nextTimelineOrder = () => { timelineOrder = Math.max(timelineOrder + 1, Date.now() * 1000); return timelineOrder; };
+export const hasRunningActivity = () => [...recent.values()].some(run => run.client_state === 'running');
 export const clearActivity = () => { recent.clear(); ++generation; };
 export function observeActivity(listener) {
   listeners.add(listener);
@@ -30,7 +31,7 @@ export function startActivity({ base, token, path, method, activityOwnerId, isCu
   const emit = () => {
     if (!isCurrent()) return;
     recent.set(id, { ...snapshot });
-    while (recent.size > 60) recent.delete(recent.keys().next().value);
+    // The active chat retains all recorded runs until the user switches chats.
     for (const listener of listeners) listener({ ...snapshot });
   };
   async function poll(final = false) {

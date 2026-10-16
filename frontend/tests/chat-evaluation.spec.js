@@ -628,14 +628,15 @@ async function openEvaluation(page, tab = 'Model comparison') {
   await page.getByRole('tab', { name: tab, exact: true }).click();
 }
 
-test('model change resets conversation and sends only selected chat profile', async ({ page }) => {
+test('model change preserves transcript, resets context and sends only selected chat profile', async ({ page }) => {
   const state = await setup(page);
   await expect(page.getByLabel('Chat model')).toHaveValue('flash');
   await page.getByLabel('Message to agent').fill('Which inventory needs attention?');
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect(page.getByRole('log')).toContainText('Fixture answer');
   await page.getByLabel('Chat model').selectOption('pro');
-  await expect(page.getByRole('log')).not.toContainText('Fixture answer');
+  await expect(page.getByRole('log')).toContainText('Fixture answer');
+  await expect(page.getByRole('log')).toContainText('Model changed to');
   await page.getByLabel('Message to agent').fill('What is inventory coverage?');
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect(page.getByRole('log')).toContainText('Fixture answer');
@@ -666,10 +667,15 @@ test('File Search toggles preserve turns and send the new setting in the same co
 test('comparison, execution map, rating and performance render together', async ({ page }, info) => {
   await setup(page);
   await openEvaluation(page);
+  await page.getByText('Evaluation options', { exact: true }).click();
   await page.getByLabel('Expected terms').fill('coverage');
   await page.getByLabel('Built-in File Search / RAG').check();
   await page.getByRole('button', { name: 'Run comparison', exact: true }).click();
   await expect(page.locator('.comparison-card')).toHaveCount(2);
+  await expect(page.locator('.comparison-card').first().getByLabel('Recorded execution flow')).not.toBeVisible();
+  await expect.poll(() => page.locator('#main').evaluate(el => el.getBoundingClientRect().left)).toBeGreaterThanOrEqual(216);
+  await page.screenshot({ path: info.outputPath('comparison-clean.png'), fullPage: true, animations: 'disabled' });
+  await page.locator('.comparison-card').first().getByText('Execution details & sources', { exact: true }).click();
   const flow = page.locator('.comparison-card').first().getByLabel('Recorded execution flow');
   await expect(flow).toContainText('LOCAL MCP SAFETY');
   await expect(flow).toContainText('MCP RESULT VALIDATION');
@@ -747,6 +753,7 @@ test('complex prompt and recorded step review do not rerun models', async ({ pag
   const card = page.locator('.comparison-card').first();
   await expect(card.locator('.flow-step')).toHaveCount(7);
   await expect(card.locator('.flow-step').nth(1)).toContainText('get_inventory_risk');
+  await card.getByText('Execution details & sources', { exact: true }).click();
   await card.getByRole('button', { name: 'Step through', exact: true }).click();
   await expect(card.locator('[aria-current="step"]')).toContainText('Model call 1');
   await card.getByRole('button', { name: 'Next step', exact: true }).click();
@@ -937,4 +944,23 @@ test('Langfuse shows configuration scope and opens the self-hosted dashboard', a
   await expect(tracing).toContainText('verify received traces');
   await expect(tracing.getByRole('link', { name: 'Open Langfuse' })).toHaveAttribute('href', 'https://tracing.example.invalid');
   await page.screenshot({ path: info.outputPath('langfuse-monitoring.png'), fullPage: true });
+});
+
+
+test('new OpenAI connection shows its model name immediately and keeps its routing handle', async ({ page }) => {
+  await setup(page);
+  await page.getByLabel('Message to agent').fill('hello');
+  await page.getByLabel('Message to agent').press('Enter');
+  const profile = { id: 'external-new-openai', label: 'gpt-5.4-mini · OpenAI', model_id: 'gpt-5.4-mini', provider: 'openai', file_search: false };
+  await page.route('**/api/chat/external-models', route => route.fulfill({ status: 201, json: { profile } }));
+  await page.getByLabel('Chat model').selectOption('__external__');
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Provider', { exact: true }).selectOption('openai');
+  await dialog.getByLabel('API key', { exact: true }).fill('fixture-openai-private-key');
+  await dialog.getByLabel('Model ID', { exact: true }).fill('gpt-5.4-mini');
+  await dialog.getByRole('button', { name: 'Use model', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('log')).toContainText('Model changed to gpt-5.4-mini · OpenAI.');
+  await expect(page.getByRole('log')).not.toContainText('external-new-openai');
+  await expect(page.getByLabel('Chat model')).toHaveValue(profile.id);
 });

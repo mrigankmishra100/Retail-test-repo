@@ -1,8 +1,12 @@
 """Python release tests must never contact OCI, a database or tracing services."""
+import os
 import socket
 import ipaddress
 
 import pytest
+
+# Apply before test modules initialize settings. SDK tests opt in with synthetic keys.
+os.environ["LANGFUSE_TRACING_ENABLED"] = "false"
 
 
 @pytest.fixture(autouse=True)

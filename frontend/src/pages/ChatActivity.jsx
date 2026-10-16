@@ -83,14 +83,15 @@ function ActivityRun({ run, answerStatus, guardrailStatus }) {
   </details>;
 }
 
-export function useActivityRuns(active, resetKey) {
-  const [runs, setRuns] = useState([]);
-  useEffect(() => { setRuns([]); clearActivity(); }, [resetKey]);
+export function useActivityRuns(active, resetKey, initialRuns = []) {
+  const [runs, setRuns] = useState(initialRuns);
+  const lastReset = useRef(resetKey);
+  useEffect(() => { if (lastReset.current !== resetKey) setRuns([]); lastReset.current = resetKey; clearActivity(); }, [resetKey]);
   useEffect(() => {
     if (!active) return;
     return observeActivity((run) => setRuns((current) => {
       const existing = current.some((entry) => entry.id === run.id);
-      return (existing ? current.map((entry) => entry.id === run.id ? run : entry) : [...current, run]).slice(-60);
+      return (existing ? current.map((entry) => entry.id === run.id ? run : entry) : [...current, run]);
     }));
   }, [active]);
   return runs;

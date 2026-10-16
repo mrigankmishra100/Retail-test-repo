@@ -4,7 +4,7 @@ Updated from V5 source commit `f81835afaaebc02b0edbf8c1bd4555df71ad9397`.
 Includes OpenAI/Anthropic/Gemini model catalogs, persistent in-chat workflow-step
 snapshots and MCP control events. Existing optional Langfuse tracing, portable
 source images and runtime registration are preserved. Reviewed dashboard commit:
-`4900f90ca3cae3f40634c39169e52694762f81ed` on `Deployment_optimized`.
+`5162b3e` on `Deployment_optimized` (manifest and settings preflight rechecked).
 The current dashboard recipe explicitly disables OCI ApplyGuardrails and enables
 NL2SQL for Retail/MCP; adjust the deployment recipe if different flags are needed.
 All five Linux/amd64 source images passed the latest dashboard's settings
@@ -149,3 +149,20 @@ diagnostics, dependencies and Oracle Thick client loading. It does not prove
 live OCI permissions or connectivity. Builds need Docker Hub, Debian, PyPI, npm
 and Oracle download access. Supply credentials only through private runtime
 configuration; never through source files or build arguments.
+
+## Shared Langfuse integration
+
+Public images load Langfuse keys exclusively from runtime configuration. The SDK
+is installed; tracing defaults to disabled unless the private settings enable it.
+The already-hosted Langfuse instance is shared across deployments.
+
+For automatic one-click injection, the dashboard VM operator installs the included
+hook once and sets `STUDIO_LANGFUSE_CONFIG_FILE` to an operator-only JSON file.
+New runs snapshot it into encrypted private state and add it to the four server
+configurations, never the frontend. Existing runs and retries keep their original
+settings. No Langfuse resources are provisioned by the retail deployment.
+
+See [Dashboard shared Langfuse setup](docs/dashboard-shared-langfuse.md) for the
+installer, service configuration and verification steps. Publishing this branch
+alone does not install the hook on the dashboard VM. The app's Cloud monitoring
+panel reports configuration only; verify actual traces after rollout.

@@ -130,7 +130,8 @@ def test_self_hosted_configuration_preserves_deployment_settings():
 
 def test_langfuse_settings_reject_incomplete_enabled_configuration():
     with pytest.raises(ValueError, match='configuration is incomplete'):
-        Settings(_env_file=None, langfuse_tracing_enabled=True)
+        Settings(_env_file=None, langfuse_tracing_enabled=True, langfuse_base_url=None,
+                 langfuse_public_key=None, langfuse_secret_key=None)
 
 
 def test_trace_status_does_not_claim_live_connectivity_or_expose_keys(monkeypatch):
