@@ -253,11 +253,13 @@ class ChatExperienceService:
     @staticmethod
     def _evaluate_checked(service, request, session):
         from app.enterprise_ai.guardrails import local_security_decision
+        if service.container.settings.prompt_guardrails_enabled:
+            service.container.guardrails.require_sync(request.message, session.role, stage='input', source='user')
         if is_action_request(request.message):
             run = {'answer': BLOCKED_MESSAGE, 'llm_status': 'blocked', 'used_tools': [],
                    'security_details': local_security_decision('action_requires_approval')}
         else:
-            run = service._run(session=session, message=request.message)
+            run = service._run(session=session, message=request.message, check_scope=True)
             if run.get('failed_tools'):
                 run = {**run, 'answer': 'The requested live data could not be verified.', 'llm_status': 'unavailable'}
             if ACTION_CLAIM.search(run['answer']):
@@ -268,7 +270,7 @@ class ChatExperienceService:
                 'allowed_actions': [],
                 'security_details': run.get('security_details'),
                 'guardrail_status': ('BLOCKED' if run['llm_status'] == 'blocked' else
-                                    'PASSED' if service.container.settings.enterprise_ai_guardrails_enabled else 'NOT_APPLIED')}
+                                    'PASSED' if service.container.settings.prompt_guardrails_enabled else 'NOT_APPLIED')}
 
     def reserve_evaluation(self, request, *, session):
         catalog = self.catalog(session=session)

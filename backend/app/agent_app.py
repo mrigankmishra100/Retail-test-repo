@@ -225,14 +225,19 @@ def create_agent_app(settings, container=None):
             auth_event('replay_rejected' if exc.status_code == 409 else 'replay_capacity_exceeded')
             raise
         auth_event('accepted')
-        try:
-            result = await run_in_threadpool(dispatch, container, audience, envelope)
-        except ValidationError:
-            logger.info('Agent payload agent=%s operation=%s outcome=validation_rejected', audience, envelope.operation)
-            raise HTTPException(422, 'Invalid operation payload') from None
+        from app.remote_activity import capture_activity, export_activity
+        with capture_activity(envelope.session) as activity:
+            try:
+                result = await run_in_threadpool(dispatch, container, audience, envelope)
+            except ValidationError:
+                logger.info('Agent payload agent=%s operation=%s outcome=validation_rejected', audience, envelope.operation)
+                raise HTTPException(422, 'Invalid operation payload') from None
+            finally:
+                request.state.remote_activity = export_activity(activity)
         if token is None:
             return result  # Authenticated legacy callers remain compatible during worker-first rollout.
-        encoded = json.dumps(jsonable_encoder(result), separators=(',', ':'), ensure_ascii=False,
+        result = {**jsonable_encoder(result), '_activity': request.state.remote_activity}
+        encoded = json.dumps(result, separators=(',', ':'), ensure_ascii=False,
                              allow_nan=False).encode('utf-8')
         if len(encoded) > MAX_AGENT_BYTES:
             raise HTTPException(503, 'Agent response exceeds limit')

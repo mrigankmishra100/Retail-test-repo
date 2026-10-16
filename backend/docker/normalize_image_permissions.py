@@ -20,4 +20,4 @@ if __name__ == '__main__':
     service = sys.argv[1]
     if service not in {'mcp-server', 'retail-agent', 'supplier-agent', 'backend', 'frontend'}:
         raise ValueError('Unsupported service')
-    normalize([Path('/app/app'), *([Path('/app/static')] if service == 'frontend' else [])])
+    normalize([Path('/app/app'), Path('/app/static' if service == 'frontend' else '/app/policies')])

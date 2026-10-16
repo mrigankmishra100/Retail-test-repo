@@ -274,7 +274,7 @@ export default function AgentChat({ session, thread, setThread, onChange, chatTa
               {m.role === 'assistant' && <SecurityDecision details={m.security_details} status={m.guardrail_status} />}
               {m.message && (m.role === 'assistant' ? (!['BLOCKED', 'FAILED'].includes(m.guardrail_status) && <Markdown>{m.message}</Markdown>) : <p>{m.message}</p>)}
               {m.mode && !['BLOCKED', 'FAILED'].includes(m.guardrail_status) && <Badge>{['unavailable', 'disabled', 'limit_reached'].includes(m.llm_status) ? 'Answer unavailable' : m.mode === 'llm_read_only' ? 'Model-assisted answer' : 'Verified workflow facts'}</Badge>}
-              {m.guardrail_status === 'PASSED' && <small className="security-indicator">Injection checks passed</small>}
+              {m.guardrail_status === 'PASSED' && <small className="security-indicator">Prompt injection check passed</small>}
               {m.metrics?.queries?.length > 0 && <QueryDetails queries={m.metrics.queries} />}
               {m.used_tools?.length > 0 && <small>Checked with: {m.used_tools.join(', ')}</small>}
               {m.role === 'assistant' && <ChatActivity runs={m.workflowRun ? [m.workflowRun] : activityRuns.filter((run) => run.client_message_id === m.id)} answerStatus={m.llm_status} guardrailStatus={m.guardrail_status} />}

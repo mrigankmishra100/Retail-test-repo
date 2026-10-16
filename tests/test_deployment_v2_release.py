@@ -157,7 +157,7 @@ class ReleaseTests(unittest.TestCase):
 
     def test_failed_tool_does_not_get_verified_answer_route(self):
         container = SimpleNamespace(cache=OCICacheClient(allow_memory=True), responses=SimpleNamespace(enabled=True),
-            settings=SimpleNamespace(enterprise_ai_conversation_state_enabled=False, enterprise_ai_guardrails_enabled=False))
+            settings=SimpleNamespace(enterprise_ai_conversation_state_enabled=False, prompt_guardrails_enabled=False))
         service = RetailConversationService(container)
         service._load_history = Mock(return_value={'exists': False, 'next_turn': 1, 'messages': []})
         service._save_turn = Mock()

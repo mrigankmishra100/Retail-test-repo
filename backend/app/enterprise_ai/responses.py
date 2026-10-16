@@ -111,13 +111,13 @@ class EnterpriseAIResponsesClient:
         return await asyncio.to_thread(self.create_response_sync, messages,
                                        conversation_id=conversation_id, tools=tools)
 
-    def create_response_sync(self, messages, conversation_id=None, tools=None, require_file_search=False):
-        return self._traced_response(messages, conversation_id=conversation_id, tools=tools, require_file_search=require_file_search)
+    def create_response_sync(self, messages, conversation_id=None, tools=None, require_file_search=False, allow_tools=True):
+        return self._traced_response(messages, conversation_id=conversation_id, tools=tools, require_file_search=require_file_search, allow_tools=allow_tools)
 
-    def _traced_response(self, messages, conversation_id=None, tools=None, require_file_search=False):
+    def _traced_response(self, messages, conversation_id=None, tools=None, require_file_search=False, allow_tools=True):
         """Synchronous boundary for sync LangGraph nodes; native OCI function calling."""
         if self.observability is None:
-            return self._create_response_sync(messages, conversation_id=conversation_id, tools=tools, require_file_search=require_file_search)
+            return self._create_response_sync(messages, conversation_id=conversation_id, tools=tools, require_file_search=require_file_search, allow_tools=allow_tools)
         from app.observability.context import TraceContext, request_trace_id
         with self.observability.observation(
             "oci.generative_ai.response" if not hasattr(self, "provider") else f"{self.provider}.generation",
@@ -130,7 +130,7 @@ class EnterpriseAIResponsesClient:
                                  agent="retail"),
             model=self.model_id,
         ) as observation:
-            result = self._create_response_sync(messages, conversation_id=conversation_id, tools=tools, require_file_search=require_file_search)
+            result = self._create_response_sync(messages, conversation_id=conversation_id, tools=tools, require_file_search=require_file_search, allow_tools=allow_tools)
             observation.update(
                 output={"status": result.get("status"), "output": result.get("output"),
                         "tool_calls": result.get("tool_calls") or []},
@@ -140,7 +140,7 @@ class EnterpriseAIResponsesClient:
             )
             return result
 
-    def _create_response_sync(self, messages, conversation_id=None, tools=None, require_file_search=False):
+    def _create_response_sync(self, messages, conversation_id=None, tools=None, require_file_search=False, allow_tools=True):
         """Execute one OCI model request; the public boundary adds optional tracing."""
         """Synchronous OCI Responses boundary for model calls and function tools."""
         if not self._is_configured:
@@ -161,7 +161,7 @@ class EnterpriseAIResponsesClient:
         if self.api_mode != 'responses':
             raise RuntimeError('Enabled AI requires OCI Responses API mode')
         return self._create_responses_response(messages, conversation_id=conversation_id, tools=tools,
-                                               require_file_search=require_file_search)
+                                               require_file_search=require_file_search, allow_tools=allow_tools)
 
     @property
     def _is_configured(self) -> bool:
@@ -175,9 +175,13 @@ class EnterpriseAIResponsesClient:
         )
 
     @activity_step('model', 'Generating response')
-    def _create_responses_response(self, messages, *, conversation_id=None, tools=None, require_file_search=False):
+    def _create_responses_response(self, messages, *, conversation_id=None, tools=None, require_file_search=False, allow_tools=True):
         """Translate server-built functions and explicitly configured policy File Search."""
         from app.enterprise_ai.responses_transport import conversation_path, OCIResponsesUnavailable
+        if not allow_tools:
+            if require_file_search:
+                raise ValueError('Required File Search cannot run with tools disabled')
+            tools = []
         items, instructions = [], []
         for message in messages:
             role, content = message['role'].lower(), message.get('content', '')
@@ -214,6 +218,11 @@ class EnterpriseAIResponsesClient:
                    'store': bool(conversation_id)}
         if instructions:
             payload['instructions'] = '\n\n'.join(instructions)
+            if (self.model_id or '').startswith('openai.gpt-oss-') and not getattr(self, 'provider', None):
+                # OCI GPT-OSS currently ignores top-level instructions for some
+                # requests. Repeat trusted instructions as a system input item.
+                # Never promote user/history/tool content to this role.
+                items.insert(0, {'role': 'system', 'content': payload['instructions']})
         if conversation_id:
             conversation_path(conversation_id)
             payload['conversation'] = conversation_id
@@ -222,7 +231,7 @@ class EnterpriseAIResponsesClient:
                 'description': t.get('description') or '', 'parameters': t['parameters'],
                 'strict': False} for t in tools]
             payload['parallel_tool_calls'] = False
-        if self.vector_store_ids:
+        if self.vector_store_ids and allow_tools:
             payload.setdefault('tools', []).append({'type': 'file_search',
                 'vector_store_ids': self.vector_store_ids, 'max_num_results': 5})
             # Search completion metadata alone does not carry retrieved text into

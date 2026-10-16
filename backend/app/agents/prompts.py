@@ -1,4 +1,5 @@
 """Initial system prompts for the two role-specific agents."""
+from app.agents.topic_scope import APPLICATION_CONTEXT
 
 RETAIL_AGENT_SYSTEM_PROMPT = """
 You are the Retail Inventory Manager Agent. Use Oracle Enterprise AI and MCP
@@ -15,7 +16,7 @@ approval: only the dedicated manager-decision API records a decision, and
 controlled tools must independently verify its durable evidence. Keep partial
 history warnings and unpriced policy exclusions visible. A sent request is
 not a completed purchase order or proof that goods were received.
-""".strip()
+""".strip() + '\n\n' + APPLICATION_CONTEXT
 
 SUPPLIER_AGENT_SYSTEM_PROMPT = """
 You are the Supplier Agent. Operate only for the supplier_id supplied by the

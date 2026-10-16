@@ -60,15 +60,23 @@ class RetailConversationService:
         self.container = container
         self.observability = getattr(container, "langfuse", None) or LangfuseObservabilityClient()
 
-    def _run(self, *, session, message, history=(), facts=None, conversation_id=None, input_screened=False):
+    def _run(self, *, session, message, history=(), facts=None, conversation_id=None, input_screened=False,
+             check_scope=False, scope_history=None):
         CaseService._session(session).require_role("retail-manager")
         settings = self.container.settings
+        if check_scope and self.container.responses.enabled:
+            from app.agents.topic_scope import check_topic_scope
+            decision = check_topic_scope(self.container.responses, message, history if scope_history is None else scope_history)
+            if decision is not None:
+                return decision
         if settings.enterprise_ai_conversation_state_enabled and settings.enterprise_ai_api_mode != 'responses':
             raise RuntimeError('Hosted conversations require OCI Responses mode')
         return run_conversation(responses=self.container.responses,
             tools=RetailToolAccess(self.container, session), message=message, history=history, facts=facts,
             conversation_id=conversation_id, input_screened=input_screened,
-            guardrails=self.container.guardrails if settings.enterprise_ai_guardrails_enabled else None)
+            # Chat prompts are screened once in respond/evaluation. Tool permissions,
+            # validation and human approvals remain independent of text detection.
+            guardrails=None)
 
     def _load_history(self, conversation_id, workflow_id, session):
         started = monotonic()
@@ -147,7 +155,7 @@ class RetailConversationService:
         from app.services.agent_registry import enforce_agent
         enforce_agent(self.container, 'retail')
         try:
-            if self.container.settings.enterprise_ai_guardrails_enabled:
+            if self.container.settings.prompt_guardrails_enabled:
                 self.container.guardrails.require_sync(request.message, session.role, stage='input', source='user')
             return self._respond(request, session=session)
         except GuardrailDenied as exc:
@@ -237,7 +245,7 @@ class RetailConversationService:
                     result = self._run(
                         session=session, message=request.message,
                         history=history if not hosted or created else (), facts=facts,
-                        conversation_id=hosted_id, input_screened=True)
+                        conversation_id=hosted_id, input_screened=True, check_scope=True, scope_history=history)
                     CaseService._session(session).require_role("retail-manager")
                     if hosted:
                         provider["in_flight"] = result["llm_status"] != "completed"
@@ -271,11 +279,11 @@ class RetailConversationService:
                             'message': EXTERNAL_ERROR_MESSAGES.get(exc.public_code, 'The external model request failed. Check the selected model and provider access.'),
                             'llm_status': 'unavailable', 'conversation_id': conversation_id,
                             'used_tools': [], 'allowed_actions': [], 'response_route': 'LLM',
-                            'guardrail_status': 'PASSED' if self.container.settings.enterprise_ai_guardrails_enabled else 'NOT_APPLIED'}
+                            'guardrail_status': 'PASSED' if self.container.settings.prompt_guardrails_enabled else 'NOT_APPLIED'}
                     raise RuntimeError("Retail conversation unavailable") from None
                 route = "NL2SQL" if "query_retail_data" in result.get("successful_tools", []) else "LLM"
                 # Model-loop security checks passed; commercial authority is checked separately below.
-                guardrail, status = ("PASSED" if self.container.settings.enterprise_ai_guardrails_enabled else "NOT_APPLIED"), "COMPLETED"
+                guardrail, status = ("PASSED" if self.container.settings.prompt_guardrails_enabled else "NOT_APPLIED"), "COMPLETED"
                 if result.get('failed_tools') or result['llm_status'] != 'completed':
                     route, status = 'LLM', 'FAILED'
                     if result.get('failed_tools'):

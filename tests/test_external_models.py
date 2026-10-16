@@ -58,7 +58,7 @@ def container(tmp_path):
 def test_full_graph_function_round_trip_uses_selected_provider(container, provider):
     session = actor()
     connection = container.external_models.register(config(provider), session)
-    responses = [provider_result(provider, call=True), provider_result(provider)]
+    responses = [provider_result(provider, text='IN_SCOPE'), provider_result(provider, call=True), provider_result(provider)]
     payloads = []
     def fake_post(client, path, payload):
         assert client.provider == provider
@@ -68,18 +68,19 @@ def test_full_graph_function_round_trip_uses_selected_provider(container, provid
         result = container.chat_experience_service.respond(ChatRequest(message='Which inventory is at risk?', model_profile=connection.profile.id), session=session, evaluation=True)
     tool.assert_called_once_with('get_inventory_risk', days=None)
     assert result['message'] == 'Review the inventory.'
-    assert result['metrics']['call_count'] == 2
+    assert result['metrics']['call_count'] == 3
     assert result['metrics']['model_id'] == 'test-model'
     assert result['metrics']['provider'] == provider
     requests = [event for event in result['metrics']['events'] if event['stage'] == 'model_tool_request']
     assert len(requests) == 1 and requests[0]['tool'] == 'get_inventory_risk'
     assert requests[0]['api_source'] == ('openai_responses' if provider == 'openai' else provider)
-    assert result['metrics']['input_tokens'] == (230 if provider == 'anthropic' else 200)
-    assert result['metrics']['output_tokens'] == (50 if provider == 'gemini' else 40)
+    assert result['metrics']['input_tokens'] == (345 if provider == 'anthropic' else 300)
+    assert result['metrics']['output_tokens'] == (75 if provider == 'gemini' else 60)
     assert result['metrics']['model_cost_usd'] is None
     assert KEY not in json.dumps(result)
-    assert len(payloads) == 2
-    second = json.dumps(payloads[1])
+    assert len(payloads) == 3
+    assert not payloads[0].get('tools')
+    second = json.dumps(payloads[2])
     assert 'items' in second
     if provider == 'gemini':
         assert 'thoughtSignature' in second and 'signature' in second and 'functionResponse' in second
@@ -115,11 +116,11 @@ def test_comparison_runs_two_external_profiles_with_read_only_tools(container):
     calls = []
     def respond(client, path, payload):
         calls.append(client.provider)
-        return provider_result(client.provider)
+        return provider_result(client.provider, text='IN_SCOPE' if 'Classify whether' in json.dumps(payload) else 'Review the inventory.')
     with patch.object(ExternalModelClient, '_post', respond):
         service.evaluate(job['run_id'], request, session)
     result = service.get_evaluation(job['run_id'], session=session)
-    assert result['status'] == 'completed' and calls == ['gemini', 'anthropic']
+    assert result['status'] == 'completed' and calls == ['gemini', 'gemini', 'anthropic', 'anthropic']
     assert all(row['metrics']['status'] == 'completed' for row in result['results'])
     assert KEY not in json.dumps(result)
     with pytest.raises(ValueError):

@@ -51,7 +51,7 @@ class ApplicationContainer:
             'features': {name: getattr(application_settings, name) for name in (
                 'enterprise_ai_responses_enabled', 'enterprise_ai_api_mode',
                 'enterprise_ai_conversation_state_enabled', 'enterprise_ai_file_search_enabled',
-                'enterprise_ai_nl2sql_enabled', 'enterprise_ai_guardrails_enabled',
+                'enterprise_ai_nl2sql_enabled', 'enterprise_ai_guardrails_enabled', 'prompt_guardrails_enabled',
                 'agent_registry_enforcement_enabled', 'remote_mcp_enabled',
                 'oci_notification_publish_enabled')},
             'status': 'configured_not_probed'})

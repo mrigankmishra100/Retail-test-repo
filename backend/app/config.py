@@ -52,6 +52,9 @@ class Settings(JsonSettingsMixin, BaseSettings):
     enterprise_ai_file_search_enabled: bool = False
     enterprise_ai_vector_store_ids: list[str] = Field(default_factory=list)
     enterprise_ai_guardrails_enabled: bool = False
+    # Dedicated prompt screening survives dashboard recipes disabling the legacy pipeline.
+    # None retains the legacy switch for existing local configurations.
+    chat_prompt_guardrails_enabled: bool | None = None
     enterprise_ai_guardrails_endpoint: str | None = None
     enterprise_ai_guardrails_version: str = Field(default='1.0.1', pattern=r'^\d+\.\d+\.\d+$')
     enterprise_ai_guardrails_timeout_seconds: float = Field(default=15, gt=0, le=30)
@@ -223,7 +226,7 @@ class Settings(JsonSettingsMixin, BaseSettings):
             if (self.enterprise_ai_model_id or '').startswith('ocid1.generativeaimodel.'):
                 raise ValueError('Responses requires a supported model name or endpoint OCID, not a native Chat model OCID')
 
-        if self.enterprise_ai_guardrails_enabled:
+        if self.prompt_guardrails_enabled:
             from app.enterprise_ai.guardrails import normalize_guardrails_endpoint
             self.enterprise_ai_guardrails_endpoint = normalize_guardrails_endpoint(
                 self.enterprise_ai_guardrails_endpoint or f'https://inference.generativeai.{self.oci_region}.oci.oraclecloud.com')
@@ -272,6 +275,11 @@ class Settings(JsonSettingsMixin, BaseSettings):
         if missing:
             raise ValueError("Enabled integration configuration is incomplete: " + "; ".join(missing))
         return self
+
+    @property
+    def prompt_guardrails_enabled(self) -> bool:
+        return (self.enterprise_ai_guardrails_enabled if self.chat_prompt_guardrails_enabled is None
+                else self.chat_prompt_guardrails_enabled)
 
     @staticmethod
     def _missing(feature: str, **settings: str | SecretStr | None) -> list[str]:

@@ -4,7 +4,7 @@
   "source_repository": "https://github.com/ORA-AIMLCOE/retail-inventory-agent",
   "source_branch": "V5",
   "source_commit": "f81835afaaebc02b0edbf8c1bd4555df71ad9397",
-  "destination_branch": "V5-one-click-deployment",
+  "destination_branch": "Retail-Inventory-Demo",
   "compatibility": [
     "Five-service source-build contract retained",
     "Portable public bases and Oracle Thick client retained",

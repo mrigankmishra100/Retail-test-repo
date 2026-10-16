@@ -97,3 +97,25 @@ def test_cloud_route_validates_window_and_hosted_proxy_allows_external_setup():
     assert integrated_target('GET', 'chat/central-logs', 'hours=6') == 'chat/central-logs?hours=6'
     for path in ['external-models', 'external-model-options']:
         assert integrated_target('POST', f'chat/{path}', '') == f'chat/{path}'
+
+
+@pytest.mark.parametrize('configured', [False, True])
+def test_hosted_tracing_status_is_forwarded_without_project_credentials(configured):
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[retail_session] = lambda: object()
+    tracing = SimpleNamespace(is_configured=configured,
+        base_url='https://tracing.example.invalid', environment='test',
+        public_key='private-project-key', secret_key='private-secret-key')
+    target = integrated_target('GET', 'chat/tracing', '')
+    with patch('app.chat_api.get_container', return_value=SimpleNamespace(langfuse=tracing)), TestClient(app) as client:
+        response = client.get('/' + target)
+    assert response.status_code == 200
+    assert response.json()['status'] == ('configured' if configured else 'disabled')
+    assert response.json()['dashboard_url'] == (tracing.base_url if configured else None)
+    assert 'private-project-key' not in response.text
+    assert 'private-secret-key' not in response.text
+    from fastapi import HTTPException
+    for method, query in [('POST', ''), ('GET', 'secret_key=value')]:
+        with pytest.raises(HTTPException):
+            integrated_target(method, 'chat/tracing', query)

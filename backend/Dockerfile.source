@@ -23,6 +23,7 @@ WORKDIR /app
 COPY backend/requirements.lock /app/requirements.lock
 RUN pip install -r requirements.lock
 COPY backend/app /app/app
+COPY policies /app/policies
 COPY backend/pyproject.toml /app/pyproject.toml
 RUN pip install --no-deps . && useradd --create-home --uid 10001 appuser \
     && chown -R appuser:appuser /app \
@@ -43,8 +44,8 @@ CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "
 
 FROM runtime AS retail-agent
 # Hyderabad deployment defaults; private CHAT_MODEL_PROFILES overrides this catalog.
-ENV CHAT_MODEL_PROFILES='[{"id":"baseline","label":"Gemini 2.5 Flash","model_id":"google.gemini-2.5-flash","file_search":true},{"id":"gpt-oss-120b","label":"GPT-OSS 120B","model_id":"openai.gpt-oss-120b","file_search":true}]'
-ENV APPLICATION_ROLE=retail-agent AGENT_REGISTRY_ENFORCEMENT_ENABLED=true
+ENV CHAT_MODEL_PROFILES='[{"id":"baseline","label":"Gemini 2.5 Flash","model_id":"google.gemini-2.5-flash","file_search":true,"input_usd_per_million":0.3,"cached_input_usd_per_million":0.3,"output_usd_per_million":2.5,"price_version":"POC configured estimates 2026-10-16; not official OCI rates"},{"id":"gpt-oss-120b","label":"GPT-OSS 120B","model_id":"openai.gpt-oss-120b","file_search":true,"input_usd_per_million":0.15,"cached_input_usd_per_million":0.15,"output_usd_per_million":0.6,"price_version":"POC configured estimates 2026-10-16; not official OCI rates"}]'
+ENV APPLICATION_ROLE=retail-agent AGENT_REGISTRY_ENFORCEMENT_ENABLED=true CHAT_PROMPT_GUARDRAILS_ENABLED=true
 CMD ["python", "-m", "uvicorn", "app.agent_main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
 
 FROM runtime AS supplier-agent
@@ -53,6 +54,6 @@ CMD ["python", "-m", "uvicorn", "app.agent_main:app", "--host", "0.0.0.0", "--po
 
 FROM runtime AS mcp-server
 # Hyderabad deployment defaults; private CHAT_MODEL_PROFILES overrides this catalog.
-ENV CHAT_MODEL_PROFILES='[{"id":"baseline","label":"Gemini 2.5 Flash","model_id":"google.gemini-2.5-flash","file_search":true},{"id":"gpt-oss-120b","label":"GPT-OSS 120B","model_id":"openai.gpt-oss-120b","file_search":true}]'
+ENV CHAT_MODEL_PROFILES='[{"id":"baseline","label":"Gemini 2.5 Flash","model_id":"google.gemini-2.5-flash","file_search":true,"input_usd_per_million":0.3,"cached_input_usd_per_million":0.3,"output_usd_per_million":2.5,"price_version":"POC configured estimates 2026-10-16; not official OCI rates"},{"id":"gpt-oss-120b","label":"GPT-OSS 120B","model_id":"openai.gpt-oss-120b","file_search":true,"input_usd_per_million":0.15,"cached_input_usd_per_million":0.15,"output_usd_per_million":0.6,"price_version":"POC configured estimates 2026-10-16; not official OCI rates"}]'
 ENV APPLICATION_ROLE=backend
 CMD ["python", "-m", "uvicorn", "app.mcp.server:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]

@@ -7,7 +7,7 @@ private repository history, credentials and runtime configuration are not import
 
 Use this source URL in the one-click dashboard and select all five services:
 
-https://github.com/mrigankmishra100/Retail-test-repo/tree/V5-one-click-deployment
+https://github.com/mrigankmishra100/Retail-test-repo/tree/Retail-Inventory-Demo
 
 The dashboard resolves the branch to an immutable commit and builds the source
 using `deployment/source-build.json`. It creates the resources, private runtime
@@ -30,7 +30,18 @@ are needed for this branch's registry demo with the locally reviewed recipe.
 See [DEPLOYMENT.md](DEPLOYMENT.md) for the runtime contract, demo steps, local build
 commands and limits. `deployment/source-release.json` records provenance and checks.
 
-## Verification for this source release
+## Updated chat and evaluation build (2026-10-16)
+
+Rebuild all five source services from the newly pushed commit. The app contains the
+12-model-call / 24-tool-call analysis budget, final-answer reservation, model-assisted
+project relevance check, OCI GPT-OSS system-message compatibility, and compact
+comparison UI. These are source changes, not settings the dashboard must enable.
+OCI ApplyGuardrails stays enabled on chat prompts through the source retail image's
+`CHAT_PROMPT_GUARDRAILS_ENABLED=true` default. Private runtime overrides still apply.
+Old images and already resolved deployment runs do not acquire new branch changes.
+See [deployment parity and analysis behavior](docs/model-operations.md).
+
+## Initial source-release verification (historical)
 
 - 237 Python tests and 9 subtests passed, including UI API deactivation followed
   by the actual signed-client routing boundary, for both Retail and Supplier.

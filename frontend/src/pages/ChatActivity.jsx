@@ -23,6 +23,7 @@ const titles = {
   'supplier.wait_review': 'Waiting for review', 'supplier.wait_delivery': 'Waiting for publication status',
 };
 function stepTitle(step) {
+  if (step.stage === 'topic_scope' && step.name === 'topic_scope') return `Retail app relevance · ${words(step.status)}`;
   if (step.stage === 'tool_validation') return `${step.name} · invalid arguments`;
   if (step.stage === 'model_tool_request') return `${apiLabel(step.api_source)} requested · ${step.name}`;
   if (step.stage === 'built_in_tool') return fileSearchLabel(step.api_source);
@@ -73,7 +74,7 @@ function ActivityRun({ run, answerStatus, guardrailStatus }) {
       <ol>{steps.map((step) => <li key={step.id} className={`activity-step ${step.status}`}>
         <span className="activity-step-dot" aria-hidden="true" />
         <details><summary><span>{stepTitle(step)}</span>{!['agent_mapping', 'tool_transport', 'retrieval', 'chat', 'model_tool_request'].includes(step.stage) && <small>{step.status === 'running' && !running ? 'Outcome unreported' : words(step.status)}</small>}<time>{step.duration_ms != null ? timing(step.duration_ms) : ''}</time></summary>
-          <div><code>{step.name}</code><span>{words(step.stage)} · started +{timing(step.offset_ms)}</span>{step.stage === 'model_tool_request' && <span>The model requested this tool. The application checks permissions and arguments before executing it.</span>}{controlDescription(step) && <span>{controlDescription(step)}</span>}</div>
+          <div><code>{step.name}</code><span>{words(step.stage)} · started +{timing(step.offset_ms)}</span>{step.service && <span>Recorded by {step.service} · received when the service returned.</span>}{step.stage === 'model_tool_request' && <span>The model requested this tool. The application checks permissions and arguments before executing it.</span>}{controlDescription(step) && <span>{controlDescription(step)}</span>}</div>
         </details>
       </li>)}</ol>
       {run.truncated && <p>Showing the first 200 activity steps.</p>}

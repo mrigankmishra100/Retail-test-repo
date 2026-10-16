@@ -86,12 +86,13 @@ parent_step = ContextVar('live_activity_parent', default=None)
 
 
 class RequestActivity:
-    def __init__(self, identifier):
+    def __init__(self, identifier, activity_store=None):
         self.id, self.bound = identifier, False
+        self.store = activity_store if activity_store is not None else store
 
     def bind(self, session):
         if not self.bound:
-            self.bound = store.start(self.id, session.session_id)
+            self.bound = self.store.start(self.id, session.session_id)
 
 
 def bind_session(session):
@@ -106,7 +107,7 @@ def activity_span(stage, name):
     if not activity or not activity.bound:
         yield
         return
-    identifier = store.step(activity.id, stage, name, parent=parent_step.get())
+    identifier = activity.store.step(activity.id, stage, name, parent=parent_step.get())
     token, started, status = parent_step.set(identifier), monotonic(), 'completed'
     try:
         yield
@@ -117,7 +118,7 @@ def activity_span(stage, name):
         raise
     finally:
         parent_step.reset(token)
-        store.end_step(activity.id, identifier, status, monotonic()-started)
+        activity.store.end_step(activity.id, identifier, status, monotonic()-started)
 
 
 def activity_step(stage, name):
@@ -133,7 +134,7 @@ def activity_step(stage, name):
 def activity_note(stage, name, status, *, api_source=None, error_code=None):
     activity = active_activity.get()
     if activity and activity.bound:
-        store.step(activity.id, stage, name, status, parent=parent_step.get(), api_source=api_source, error_code=error_code)
+        activity.store.step(activity.id, stage, name, status, parent=parent_step.get(), api_source=api_source, error_code=error_code)
 
 
 class ActivityMiddleware(BaseHTTPMiddleware):

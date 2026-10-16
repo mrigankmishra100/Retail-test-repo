@@ -264,7 +264,13 @@
 .langfuse-tracing p { font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
 
 /* Keep comparison answers prominent and detailed diagnostics optional. */
-.comparison-model-actions { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; }
+.comparison-model-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
+.comparison-toolbar { display: flex; align-items: center; gap: 10px; }
+.comparison-toolbar .evaluation-status { padding: 4px 10px; font-size: 11px; }
+.comparison-workspace .regional-adapter { margin: 8px 0 10px; padding: 10px 12px; }
+.comparison-workspace .evaluation-scenarios { margin: 10px 0; }
+.comparison-workspace .comparison-options { padding: 10px 0; margin-top: 10px; }
+.comparison-workspace .evaluation-submit { margin-top: 10px; }
 .comparison-model-actions h3 { margin: 0; font-size: 18px; }
 .comparison-model-actions p { margin: 6px 0 0; color: #716a62; font-size: 13px; }
 .chat-evaluation .comparison-model-actions select { width: auto; max-width: 220px; }
@@ -276,4 +282,4 @@
 .comparison-answer { max-height: none; overflow: visible; }
 .comparison-card header { background: #fcfbf9; }
 .comparison-card .eyebrow { font-size: 10px; color: #82786d; }
-@media (max-width: 650px) { .comparison-model-actions { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 650px) { .comparison-model-actions { align-items: flex-start; flex-direction: column; } .comparison-toolbar { width: 100%; justify-content: space-between; flex-wrap: wrap; } }

@@ -126,7 +126,9 @@ def call_remote(container, session, name, arguments):
             await client.list_tools()
             stage = 'tool_execution'
             logger.info('mcp_remote_stage', extra={**metadata, 'stage': stage})
-            result = await client.call_tool(name, arguments, timeout=45)
+            result = await client.call_tool(name, arguments, timeout=45, raise_on_error=False)
+            from app.remote_activity import merge_activity
+            merge_activity((result.meta or {}).get('retail_activity'), service='mcp-server', started=started)
             if result.is_error:
                 # Only the boundary's fixed category crosses back to the caller.
                 # Never forward raw SDK/server text, tool arguments or secrets.

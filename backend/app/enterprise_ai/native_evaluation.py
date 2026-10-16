@@ -26,7 +26,9 @@ class NativeChatEvaluationClient:
         self.timeout = timeout
 
     @activity_step('model', 'Generating response')
-    def create_response_sync(self, messages, conversation_id=None, tools=None, require_file_search=False):
+    def create_response_sync(self, messages, conversation_id=None, tools=None, require_file_search=False, allow_tools=True):
+        if not allow_tools:
+            tools = []
         if conversation_id or require_file_search:
             raise ValueError('Native Chat evaluation does not support managed conversations or File Search')
         if not messages:

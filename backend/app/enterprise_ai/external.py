@@ -132,15 +132,17 @@ class ExternalModelClient(EnterpriseAIResponsesClient):
             seen.add(cursor)
         raise ExternalModelUnavailable('external_response_too_large')
 
-    def create_response_sync(self, messages, conversation_id=None, tools=None, require_file_search=False):
-        return self._traced_response(messages, conversation_id=conversation_id, tools=tools, require_file_search=require_file_search)
+    def create_response_sync(self, messages, conversation_id=None, tools=None, require_file_search=False, allow_tools=True):
+        return self._traced_response(messages, conversation_id=conversation_id, tools=tools, require_file_search=require_file_search, allow_tools=allow_tools)
 
-    def _create_response_sync(self, messages, conversation_id=None, tools=None, require_file_search=False):
+    def _create_response_sync(self, messages, conversation_id=None, tools=None, require_file_search=False, allow_tools=True):
+        if not allow_tools:
+            tools = []
         if conversation_id or require_file_search:
             raise ValueError('External models use application history and function tools; OCI hosted File Search is unavailable')
         try:
             if self.provider == 'openai':
-                return self._create_responses_response(messages, tools=tools)
+                return self._create_responses_response(messages, tools=tools, allow_tools=allow_tools)
             return self._create_native_response(messages, tools)
         except ExternalModelUnavailable:
             raise

@@ -449,7 +449,7 @@ test('each answer owns its activity even when final telemetry arrives out of ord
     const id = new URL(route.request().url()).pathname.split('/').at(-1), index = runs.get(id);
     if (index === 1) await delayed;
     await route.fulfill({ json: { id, status: 'completed', duration_ms: index * 1000,
-      steps: [{ id: `step-${index}`, name: `Tool for answer ${index}`, stage: 'function_tool', status: 'completed', duration_ms: 20, offset_ms: 0 }] } });
+      steps: [{ id: `step-${index}`, name: `Tool for answer ${index}`, stage: 'function_tool', status: 'completed', duration_ms: 20, offset_ms: 0, service: 'retail-agent' }] } });
   });
   try {
     for (const prompt of ['Compare lead times', 'Compare minimum quantities']) {
@@ -472,6 +472,8 @@ test('each answer owns its activity even when final telemetry arrives out of ord
     await answers.nth(index).locator('.chat-activity-run > summary').click();
     await expect(answers.nth(index)).toContainText(`Tool for answer ${index + 1}`);
     await expect(answers.nth(index)).not.toContainText(`Tool for answer ${2 - index}`);
+    await answers.nth(index).locator('.activity-step details > summary').click();
+    await expect(answers.nth(index).getByText('Recorded by retail-agent · received when the service returned.')).toBeVisible();
   }
   await expect(page.locator('.chat-transcript > .chat-activity')).toHaveCount(0);
   await page.screenshot({ path: info.outputPath('activity-per-answer.png') });
@@ -747,6 +749,10 @@ test('dedicated evaluation navigation preserves chat and supports browser histor
 test('complex prompt and recorded step review do not rerun models', async ({ page }) => {
   const state = await setup(page);
   await openEvaluation(page);
+  await expect(page.getByText('Select two or three to compare the same prompt.', { exact: true })).toHaveCount(0);
+  await expect(page.locator('.comparison-contract')).toHaveCount(0);
+  const submit = await page.getByRole('button', { name: 'Run comparison', exact: true }).boundingBox();
+  expect(submit.y + submit.height).toBeLessThan(950);
   await page.getByRole('button', { name: 'Multi-constraint analysis', exact: true }).click();
   await expect(page.getByLabel('Evaluation prompt')).toHaveValue(/identify missing information rather than inventing values/);
   await page.getByRole('button', { name: 'Run comparison', exact: true }).click();

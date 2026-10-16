@@ -58,6 +58,9 @@ def test_history_and_supplier_reads_accept_model_independent_signed_calls(remote
                        ('get_suppliers_for_item',{'item_id':'ITEM001'})]:
         result = call(name,args,selection)
         assert not result.get('isError'), result
+        steps = result['_meta']['retail_activity']['steps']
+        assert any(s['stage'] == 'mcp_safety' and s['status'] == 'passed' for s in steps)
+        assert any(s['stage'] == 'mcp_result' and s['status'] == 'passed' for s in steps)
     container.chat_history_service.get.assert_called_once()
     container.supplier_service.get_suppliers_for_item.assert_called_once_with('ITEM001')
     container.chat_experience_service.scoped_container.assert_not_called()
@@ -80,6 +83,16 @@ def test_tampered_data_request_still_rejected(remote):
         {'profile':'external-test','model_id':'provider-model'},signed_args={'item_id':'ITEM001'})
     assert result['isError'] and 'forbidden' in json.dumps(result)
     container.supplier_service.get_suppliers_for_item.assert_not_called()
+
+
+def test_remote_mcp_result_validation_failure_preserves_control_evidence(remote):
+    call, container = remote
+    container.chat_history_service.get.return_value = {}
+    container.chat_history_service.get.side_effect = None
+    result = call('get_chat_history', {'conversation_id': str(uuid4())}, None)
+    assert result['isError']
+    steps = result['_meta']['retail_activity']['steps']
+    assert any(s['stage'] == 'mcp_result' and s['status'] == 'failed' for s in steps)
 
 
 def test_sender_only_delegates_model_identity_for_capabilities_that_need_it():

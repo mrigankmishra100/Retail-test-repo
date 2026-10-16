@@ -15,7 +15,7 @@ ROUTES = (
     ('POST', rf'registry/agents/{ID}/(activate|deactivate)', None, set()),
     ('POST', r'chat', None, set()),
     ('GET', rf'activity/{ID}', None, set()),
-    ('GET', r'chat/(models|metrics|official-costs|routing)', None, set()),
+    ('GET', r'chat/(models|metrics|official-costs|routing|tracing)', None, set()),
     ('GET', r'chat/central-logs', None, {'hours'}),
     ('POST', r'chat/(external-models|external-model-options)', None, set()),
     ('POST', r'chat/evaluations', None, set()),

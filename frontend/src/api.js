@@ -19,7 +19,9 @@ export async function request(path, { method = 'GET', body, key, activityOwnerId
   const activity = startActivity({ base: BASE, token: requestToken, path, method, activityOwnerId, isCurrentSession: () => token === requestToken });
   let outcome = 'interrupted', activityResponse;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 90000);
+  // Hosted agent calls can take up to 250 seconds; allow the server to return
+  // its outcome instead of abandoning a longer multi-tool analysis at 90s.
+  const timeout = setTimeout(() => controller.abort(), path === '/chat' ? 270000 : 90000);
   try {
     const response = await fetch(`${BASE}${path}`, {
       method,

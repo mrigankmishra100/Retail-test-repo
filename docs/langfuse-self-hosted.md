@@ -61,12 +61,15 @@ not an MCP call. Private model reasoning is not exported by these generation hoo
 There is no fixed lifetime token quota per application chat. Default OCI output is
 6000 tokens per generation (configurable from 1 to 16000); external connections
 request 4096 by default (256 to 16000). Providers may impose stricter limits.
-One read-only chat request is limited to four model calls, eight tool calls, and
+One read-only chat request uses one tools-disabled relevance check, then at most
+twelve analysis model calls (the last reserved for synthesis), twenty-four tool calls, and
 160000 serialized context characters. User messages are limited to 12000 characters, and chat answers to 16000 characters.
 Application history loads up to 20 recent message records, keeping whole exchanges
 within a 60000-character history budget. This does not remove saved messages. OCI hosted conversation
 state can retain older context and is also subject to the provider context window.
-The browser request timeout is 90 seconds. Starting a new chat reduces conversation
+The browser chat request timeout is 270 seconds; other API requests retain 90 seconds.
+Hosted-agent transport retains its 250-second maximum and provider/gateway timeouts still apply.
+Starting a new chat reduces conversation
 context but does not reset provider billing or rate limits.
 
 ## Session chats

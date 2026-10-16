@@ -213,15 +213,17 @@ def test_invalid_supplier_arguments_need_verified_correction(recover):
 
 
 def test_repeated_invalid_arguments_keep_existing_model_limit_and_never_execute():
+    from app.agents.retail_conversation import MAX_MODEL_CALLS
     tools, guard, responses = graph_fixture('unused')
     responses.create_response_sync.side_effect = [
         {'status': 'completed', 'output': '', 'tool_calls': [
             {'id': f'bad{i}', 'name': 'get_supplier_policy', 'arguments': '{"supplier_id":"01"}'}]}
-        for i in range(4)]
+        for i in range(MAX_MODEL_CALLS)]
     result = run_conversation(responses=responses, tools=tools, message='Policy of supplier 01', guardrails=guard)
     assert result['llm_status'] == 'limit_reached'
     assert result['failed_tools']
-    assert responses.create_response_sync.call_count == 4
+    assert responses.create_response_sync.call_count == MAX_MODEL_CALLS
+    assert responses.create_response_sync.call_args.kwargs['allow_tools'] is False
     tools.call.assert_not_called()
 
 

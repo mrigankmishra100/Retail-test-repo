@@ -85,18 +85,24 @@ class ChatEvaluationTests(unittest.TestCase):
         self.assertEqual(result['citations'][0]['filename'], 'policy.pdf')
         self.assertEqual(result['builtin_tools'][0]['type'], 'file_search_call')
         self.assertEqual(client.transport.request.call_args.args[2]['tools'][0]['type'], 'file_search')
+        client.create_response_sync([{'role': 'user', 'content': 'Classify this request'}], allow_tools=False,
+                                    tools=[{'name': 'ignored', 'parameters': {}}])
+        payload = client.transport.request.call_args.args[2]
+        self.assertNotIn('tools', payload)
+        self.assertNotIn('conversation', payload)
 
     def test_real_graph_routes_tools_and_sums_multiple_model_calls(self):
         self.enable()
         self.container.responses.create_response_sync = Mock(side_effect=[
+            {'status': 'completed', 'output': 'IN_SCOPE', 'tool_calls': [], 'usage': {'input_tokens': 10, 'output_tokens': 2}},
             {'status': 'completed', 'output': '', 'usage': {'input_tokens': 100, 'output_tokens': 10},
              'tool_calls': [{'id': 'c1', 'name': 'get_inventory_risk', 'arguments': '{}'}]},
             {'status': 'completed', 'output': 'Review stock coverage.', 'usage': {'input_tokens': 150, 'output_tokens': 20}, 'tool_calls': []}])
         with patch('app.agents.tool_access.RetailToolAccess.call', return_value={'items': []}) as call:
             result = self.service.respond(ChatRequest(message='Which items are at risk?', model_profile='b'), session=self.actor, evaluation=True, expected_terms=['coverage'])
         call.assert_called_once_with('get_inventory_risk', days=None)
-        self.assertEqual(result['metrics']['input_tokens'], 250)
-        self.assertEqual(result['metrics']['output_tokens'], 30)
+        self.assertEqual(result['metrics']['input_tokens'], 260)
+        self.assertEqual(result['metrics']['output_tokens'], 32)
         self.assertTrue(result['metrics']['quality']['expected_terms'][0]['found'])
         self.assertTrue(result['metrics']['quality']['tools_succeeded'])
         self.assertTrue(any(e.get('tool') == 'get_inventory_risk' for e in result['metrics']['events']))
@@ -113,6 +119,7 @@ class ChatEvaluationTests(unittest.TestCase):
     def test_function_registry_rejects_mutation_requested_by_model(self):
         self.enable()
         self.container.responses.create_response_sync = Mock(side_effect=[
+            {'status': 'completed', 'output': 'IN_SCOPE', 'tool_calls': []},
             {'status': 'completed', 'tool_calls': [{'id': 'x', 'name': 'send_supplier_request', 'arguments': '{}'}]},
             {'status': 'completed', 'output': 'Done', 'tool_calls': []}])
         with patch('app.agents.tool_access.RetailToolAccess.call') as tool:
@@ -222,9 +229,9 @@ class ChatEvaluationTests(unittest.TestCase):
 
     def test_api_background_comparison_and_owner_isolation(self):
         self.enable()
-        self.container.responses.create_response_sync = Mock(return_value={
-            'status': 'completed', 'output': 'Review coverage.', 'tool_calls': [],
-            'usage': {'input_tokens': 100, 'output_tokens': 20}})
+        self.container.responses.create_response_sync = Mock(side_effect=lambda messages, **options: {
+            'status': 'completed', 'output': 'IN_SCOPE' if options.get('allow_tools') is False else 'Review coverage.',
+            'tool_calls': [], 'usage': {'input_tokens': 100, 'output_tokens': 20}})
         app = FastAPI(); app.include_router(router)
         app.dependency_overrides[retail_session] = lambda: self.actor
         with patch('app.chat_api.get_container', return_value=self.container), TestClient(app) as client:

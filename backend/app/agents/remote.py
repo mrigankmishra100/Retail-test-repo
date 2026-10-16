@@ -92,6 +92,8 @@ class RemoteAgentClient:
             stage = 'response_validation'
             # Responses use the same opaque encoding so required null fields survive the gateway.
             result = json.loads(decode_transport(transport_payload(raw), MAX_AGENT_BYTES))
+            from app.remote_activity import merge_activity
+            merge_activity(result.pop('_activity', None), service=self.audience + '-agent', started=started)
             from app.services.chat_experience import ChatCatalog
             from app.external_models import ExternalModelConnection, ExternalModelOptions
             model = ExternalModelOptions if operation == 'discover_models' else ExternalModelConnection if operation == 'connect_model' else ChatCatalog if operation == 'chat_catalog' else ChatResponse if operation in {'chat', 'chat_evaluate'} else (
@@ -105,10 +107,17 @@ class RemoteAgentClient:
             remote_trace = exc.headers.get('X-Trace-ID')
             external_code = None
             agent_code = None
+            try:
+                raw_error = exc.read(MAX_RESPONSE_WIRE_BYTES + 1)
+                error = json.loads(raw_error) if len(raw_error) <= MAX_RESPONSE_WIRE_BYTES else {}
+                from app.remote_activity import merge_activity
+                merge_activity(error.get('_activity'), service=self.audience + '-agent', started=started)
+            except (ValueError, TypeError, AttributeError):
+                error = {}
             if status == 503:
                 from app.enterprise_ai.external import EXTERNAL_ERROR_MESSAGES
                 try:
-                    code = json.loads(exc.read(4096)).get('error', {}).get('code')
+                    code = error.get('error', {}).get('code')
                     from app.services.agent_registry import AGENT_ERROR_MESSAGES
                     if code in AGENT_ERROR_MESSAGES: agent_code = code
                     if code in EXTERNAL_ERROR_MESSAGES: external_code = code

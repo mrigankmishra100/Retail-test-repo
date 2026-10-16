@@ -144,14 +144,13 @@ export default function ChatEvaluation({ catalog, active, refreshKey, sessionId,
     </div>
     <div role="tabpanel" id="eval-view-compare" aria-labelledby="eval-tab-compare" hidden={tab !== 'compare'}>
     <div className="comparison-workspace" id="model-comparison">
-      {job && <div className="comparison-status-row"><span className="evaluation-status" role="status">{job.status}</span></div>}
       {models.length < 2 && <p className="evaluation-notice">Add at least two models to enable comparison.</p>}
       {!canEvaluate && <p className="evaluation-notice">Connect an external model or configure OCI models to enable comparison.</p>}
       <form onSubmit={start}>
         <fieldset disabled={Boolean(busy)} aria-label="Models to compare (select two or three)">
-        <div className="comparison-model-actions"><div><h3>Choose models</h3><p>Select two or three to compare the same prompt.</p></div><select aria-label="Add comparison model" value="" onChange={(event) => { if (event.target.value === 'external') setExternalDialog(true); }}>
+        <div className="comparison-model-actions"><h3>Choose models</h3><div className="comparison-toolbar">{job && <span className="evaluation-status" role="status">{job.status}</span>}<select aria-label="Add comparison model" value="" onChange={(event) => { if (event.target.value === 'external') setExternalDialog(true); }}>
           <option value="">Add model…</option><option value="external">External model…</option>
-        </select></div><div className="model-choices">
+        </select></div></div><div className="model-choices">
           {models.map((m) => <label key={m.id} title={m.model_id}><input type="checkbox" aria-label={m.label} checked={selected.includes(m.id)}
             disabled={!selected.includes(m.id) && selected.length >= 3}
             onChange={(e) => setSelected((s) => e.target.checked ? [...s, m.id] : s.filter((id) => id !== m.id))} />
@@ -161,7 +160,6 @@ export default function ChatEvaluation({ catalog, active, refreshKey, sessionId,
             setRegionalEnabled(enabled); setRegional((value) => ({ ...value, api_key: '' }));
             setSelected((values) => enabled ? [...values.slice(0, 2), regionalId] : values.filter((id) => id !== regionalId));
           }} />
-          <details className="comparison-contract"><summary>Same prompt · Fresh context · Read-only tools</summary><p>Each model chooses its own tool calls. Compare completed answers and execution evidence before adopting a replacement.</p></details>
           <div className="evaluation-scenarios"><span>Prompt starters</span><button type="button" onClick={() => setPrompt('Which items are at risk of a stockout, and what should I review next?')}>Inventory overview</button><button type="button" onClick={() => setPrompt('Using current inventory and available supplier data, identify up to three items with the most urgent stockout risk. For each, compare stock coverage with supplier lead time, quantify any gap using returned data, and recommend a priority and next action. Explain trade-offs and identify missing information rather than inventing values. Return a comparison table followed by a concise recommendation. Keep recommendations advisory and read-only.')}>Multi-constraint analysis</button></div>
           <label className="eval-field">Evaluation prompt<textarea rows="3" required maxLength="4000" value={prompt} onChange={(e) => setPrompt(e.target.value)} /></label>
           <details className="comparison-options"><summary>Evaluation options</summary><div className="evaluation-options"><label className="eval-field">Expected terms (optional, comma separated)<input value={terms} maxLength="1000" onChange={(e) => setTerms(e.target.value)} placeholder="e.g. stockout, coverage, review" /></label>

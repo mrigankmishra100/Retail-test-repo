@@ -38,8 +38,13 @@ def error_response(request, status, *, fields=None, headers=None, detail=None):
     if status == 503 and isinstance(detail, dict) and detail.get("code") in safe_details:
         code = detail["code"]
         message = safe_details[code]
-    return JSONResponse(status_code=status, headers=headers, content={"error": {
-        "code": code, "message": message, "trace_id": request.state.trace_id, "fields": fields or []}})
+    content = {"error": {"code": code, "message": message,
+                        "trace_id": request.state.trace_id, "fields": fields or []}}
+    # Set only after the agent endpoint authenticates the signed invocation.
+    activity = getattr(request.state, 'remote_activity', None)
+    if activity is not None:
+        content['_activity'] = activity
+    return JSONResponse(status_code=status, headers=headers, content=content)
 
 
 def install_http_contract(app: FastAPI):

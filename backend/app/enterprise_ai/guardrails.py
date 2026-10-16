@@ -72,10 +72,10 @@ class EnterpriseAIGuardrailsClient:
     @classmethod
     def from_settings(cls, settings):
         return cls(endpoint=settings.enterprise_ai_guardrails_endpoint,
-            enabled=settings.enterprise_ai_guardrails_enabled, compartment_id=settings.oci_compartment_id,
+            enabled=settings.prompt_guardrails_enabled, compartment_id=settings.oci_compartment_id,
             config_file=settings.oci_config_file, config_profile=settings.oci_config_profile,
             auth_mode=settings.oci_auth_mode, version=settings.enterprise_ai_guardrails_version,
-            timeout=settings.enterprise_ai_guardrails_timeout_seconds, custom_rules_enabled=True)
+            timeout=settings.enterprise_ai_guardrails_timeout_seconds, custom_rules_enabled=False)
 
     @cached_property
     def client(self):

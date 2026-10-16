@@ -58,8 +58,25 @@ class ToolBoundaryMiddleware(Middleware):
                 except (ValueError, TypeError, AttributeError):
                     pass
             stage = 'tool_execution'
-            result = await call_next(context)
+            if delegated_token is not None:
+                from app.remote_activity import capture_activity, export_activity
+                from fastmcp.tools.base import ToolResult
+                with capture_activity(session) as activity:
+                    try:
+                        result = await call_next(context)
+                    except Exception as exc:
+                        # Preserve failure evidence without exposing raw exception text.
+                        code = str(exc).split(';', 1)[0] if isinstance(exc, ToolError) else ''
+                        if code not in {'not_found', 'conflict', 'forbidden', 'unauthorized',
+                                        'validation_error', 'policy_unavailable', 'capability_unavailable'}:
+                            code = 'dependency_unavailable'
+                        result = ToolResult(content=code + '; MCP tool failed', is_error=True)
+                    result.meta = {**(result.meta or {}), 'retail_activity': export_activity(activity)}
+            else:
+                result = await call_next(context)
             stage, status = 'completed', 'success'
+            if getattr(result, 'is_error', False):
+                status = 'failed'
             return result
         except ToolError as exc:
             logger.warning('mcp_boundary_failed', extra={**metadata,'stage':stage,'error_type':type(exc).__name__})
