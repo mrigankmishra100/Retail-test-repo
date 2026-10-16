@@ -133,6 +133,9 @@ class ExternalModelClient(EnterpriseAIResponsesClient):
         raise ExternalModelUnavailable('external_response_too_large')
 
     def create_response_sync(self, messages, conversation_id=None, tools=None, require_file_search=False):
+        return self._traced_response(messages, conversation_id=conversation_id, tools=tools, require_file_search=require_file_search)
+
+    def _create_response_sync(self, messages, conversation_id=None, tools=None, require_file_search=False):
         if conversation_id or require_file_search:
             raise ValueError('External models use application history and function tools; OCI hosted File Search is unavailable')
         try:

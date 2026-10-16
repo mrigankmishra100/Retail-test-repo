@@ -54,7 +54,7 @@ def invoke(action, *args, **kwargs):
     except PermissionError as exc:
         from app.services.agent_registry import AgentUnavailable
         if isinstance(exc, AgentUnavailable):
-            raise HTTPException(503, str(exc)) from exc
+            raise HTTPException(503, {'code': exc.public_code}) from exc
         raise HTTPException(403, str(exc)) from exc
     except ExternalModelUnavailable as exc:
         raise HTTPException(503, {'code': exc.public_code}) from exc

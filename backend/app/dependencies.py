@@ -250,6 +250,10 @@ class ApplicationContainer:
         return RetailConversationService(self)
 
     def _remote_agent(self, name):
+        from app.services.agent_registry import AgentUnavailable, enforce_agent
+        enforce_agent(self, name)
+        if not self.settings.agent_endpoints.get(name) or not self.settings.agent_service_keys.get(name):
+            raise AgentUnavailable(code=f'{name}_agent_not_configured')
         from app.agents.remote import RemoteAgentClient
         return RemoteAgentClient(audience=name, endpoint=self.settings.agent_endpoints[name],
             key=self.settings.agent_service_keys[name], timeout=self.settings.agent_timeout_seconds,

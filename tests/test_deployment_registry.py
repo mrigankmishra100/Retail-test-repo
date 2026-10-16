@@ -52,7 +52,7 @@ def test_bootstrap_is_idempotent_preserves_disabled_roles_and_old_urls():
     assert len(db.rows) == 2
     assert db.rows[retail['agent_id']]['active'] == 0
     assert db.rows[retail['agent_id']]['endpoint_url'] == REGISTERED
-    with pytest.raises(AgentUnavailable, match='inactive'):
+    with pytest.raises(AgentUnavailable, match='deactivated'):
         service.require_enabled('retail')
     service.require_enabled('supplier')
 
@@ -122,7 +122,7 @@ def test_ui_deactivation_blocks_signed_outbound_until_reactivated(monkeypatch, a
         assert outbound.call_args.args[0].full_url == REGISTERED + '/internal/agent/invoke'
         assert browser.post(f"/registry/agents/{agent['agent_id']}/deactivate", headers=headers).status_code == 200
         service.bootstrap({audience: FALLBACK})  # Simulated gateway restart.
-        with pytest.raises(AgentUnavailable, match='inactive'):
+        with pytest.raises(AgentUnavailable, match='deactivated'):
             invoke()
         assert outbound.call_count == 1  # No fallback destination or model call.
         assert browser.post(f"/registry/agents/{agent['agent_id']}/activate", headers=headers).status_code == 200

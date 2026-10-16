@@ -259,3 +259,6 @@
 @media (max-width: 650px) { .cloud-log-toolbar { display: grid; } .cloud-log-record dl { grid-template-columns: 1fr; } }
 .security-indicator { display: inline-block; margin-left: 8px; color: #617062; font-size: 12px; }
 @media (max-width: 640px) { .estimated-finops { padding: 16px; } .finops-totals { gap: 20px; flex-wrap: wrap; } }
+
+.langfuse-tracing { margin-top: 20px; padding: 18px; border: 1px solid #e4e4e7; border-radius: 8px; background: #fff; }
+.langfuse-tracing p { font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }

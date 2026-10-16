@@ -108,7 +108,7 @@ class AgentRegistryService:
             logger.info('agent_registry_bootstrap', extra={'agent': registration.agent_type.lower(),
                 'status': 'registered' if inserted else 'preserved'})
 
-    def require_enabled(self, audience):
+    def require_enabled(self, audience, *, require_registered=False):
         if audience not in {'retail', 'supplier'}:
             raise ValueError('Only Retail and Supplier agents may execute')
         from app.chat_telemetry import event
@@ -119,10 +119,13 @@ class AgentRegistryService:
             registered, active = int(rows[0]['registered_count']), int(rows[0]['active_count'])
         except Exception:
             event('registry', 'unavailable', tool=audience)
-            raise AgentUnavailable('Agent registry unavailable. Execution is paused until the registry can be checked.') from None
+            raise AgentUnavailable(code='agent_registry_unavailable') from None
+        if not registered and require_registered:
+            event('registry', 'unregistered', tool=audience)
+            raise AgentUnavailable(code=f'{audience}_agent_not_registered')
         if registered and active != 1:
             event('registry', 'disabled', tool=audience)
-            raise AgentUnavailable(f'{audience.title()} agent is inactive in Agent registry. Activate an entry of type {audience.upper()} before running it.')
+            raise AgentUnavailable(code=f'{audience}_agent_inactive')
         event('registry', 'active' if registered else 'unregistered', tool=audience)
 
     def _get(self, agent_id):
@@ -179,10 +182,20 @@ class AgentRegistryService:
         return endpoint
 
 
+AGENT_ERROR_MESSAGES = {
+    'agent_registry_unavailable': 'Agent registry is temporarily unavailable. Please try again after the service is restored.',
+    **{f'{role}_agent_inactive': f'{role.title()} agent is deactivated. Activate it in Agent registry to continue.' for role in ('retail', 'supplier')},
+    **{f'{role}_agent_not_registered': f'No {role} agent is registered. Register and activate one in Agent registry to continue.' for role in ('retail', 'supplier')},
+    **{f'{role}_agent_not_configured': f'{role.title()} agent connection is not configured. Ask your administrator to complete the agent deployment.' for role in ('retail', 'supplier')},
+}
+
+
 class AgentUnavailable(PermissionError):
-    pass
+    def __init__(self, message=None, *, code='agent_registry_unavailable'):
+        self.public_code = code if code in AGENT_ERROR_MESSAGES else 'agent_registry_unavailable'
+        super().__init__(AGENT_ERROR_MESSAGES[self.public_code])
 
 
 def enforce_agent(container, audience):
     if getattr(container.settings, 'agent_registry_enforcement_enabled', False):
-        container.agent_registry_service.require_enabled(audience)
+        container.agent_registry_service.require_enabled(audience, require_registered=audience in getattr(container.settings, 'agent_endpoints', {}))

@@ -11,6 +11,7 @@ from fastmcp.exceptions import ToolError
 from pydantic import ConfigDict, TypeAdapter, ValidationError, create_model
 from app.enterprise_ai.mcp_safety import CONTROLLED_TOOLS, RETAIL_TOOLS, SUPPLIER_TOOLS
 from app.observability.context import request_trace_id, TraceContext
+from app.observability.langfuse import LangfuseObservabilityClient
 from app.services.cases import CaseService, CaseConflict, CaseNotFound
 from app.services.inventory import ItemNotFound
 from app.services.policy import PolicyDocumentError
@@ -87,7 +88,8 @@ def secured_tool(container_getter, session_getter):
                 check = "dependency"
                 container = container_getter()
                 context = trace.as_metadata()
-                with container.langfuse.observation(
+                tracing = getattr(container, "langfuse", None) or LangfuseObservabilityClient()
+                with tracing.observation(
                     "mcp." + fn.__name__, as_type="tool", input=values,
                     metadata={"workflow": "mcp", "tool_name": fn.__name__}, context=trace,
                 ) as observation:

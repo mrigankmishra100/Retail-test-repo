@@ -24,6 +24,7 @@ _SENSITIVE_KEY = re.compile(
     re.IGNORECASE,
 )
 _INFRASTRUCTURE_KEYS = {
+    "encrypted_content", "thought_signature", "thoughtsignature",
     "config_dir", "config_file", "dsn", "endpoint", "object_name", "opc_request_id",
     "policy_source", "provider_id", "wallet", "wallet_password",
 }
@@ -103,7 +104,11 @@ class SafeObservation:
         if status_message is not None:
             values["status_message"] = sanitize_trace_data(status_message)
         if usage_details is not None:
-            values["usage_details"] = usage_details
+            values["usage_details"] = {
+                target: usage_details[source]
+                for source, target in (("input_tokens", "input"), ("output_tokens", "output"), ("total_tokens", "total"))
+                if type(usage_details.get(source)) is int and usage_details[source] >= 0
+            }
         try:
             self._observation.update(**values)
         except Exception:

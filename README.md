@@ -44,3 +44,5 @@ Docker was not running on the preparation machine, so the new Linux images and
 container smoke checks have not been executed for this release. OCI deployment,
 live model calls and the deployed deactivation demo remain to be tested through
 the dashboard. No cloud resources were created during preparation.
+
+See [self-hosted Langfuse activation and chat limits](docs/langfuse-self-hosted.md).

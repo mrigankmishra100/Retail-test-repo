@@ -73,6 +73,7 @@ const query = (params) =>
   new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined)).toString();
 export const api = {
   officialCosts: () => request('/chat/official-costs'),
+  tracing: () => request('/chat/tracing'),
   centralLogs: (hours = 1) => request(`/chat/central-logs${hours === 1 ? '' : `?hours=${hours}`}`),
   agentRouting: () => request('/chat/routing'),
   chatModels: () => request('/chat/models'),

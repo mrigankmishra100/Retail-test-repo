@@ -143,6 +143,7 @@ class ChatExperienceService:
                 'enterprise_ai_vector_store_ids': list(regional.vector_store_ids) if rag else []})
             # Fresh transport: never reuse a cached client or credentials from the baseline.
             client = EnterpriseAIResponsesClient.from_settings(scoped.settings)
+        client.observability = getattr(self.container, "langfuse", None)
         scoped.responses = MeasuredResponses(client, trace)
         # A shallow service copy retains the shared database/approval dependencies,
         # but every narrative call uses this selection, including draft tools.

@@ -288,7 +288,7 @@ def test_inactive_role_never_invokes_workflow_graph(name):
     graph = Mock()
     with pytest.raises(AgentUnavailable): service._run(graph, {}, {})
     graph.invoke.assert_not_called()
-    container.agent_registry_service.require_enabled.assert_called_once_with(name)
+    container.agent_registry_service.require_enabled.assert_called_once_with(name, require_registered=False)
 
 
 def test_model_estimate_survives_unknown_file_search_fee_and_preserves_rates():

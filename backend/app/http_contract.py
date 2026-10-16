@@ -32,6 +32,8 @@ def error_response(request, status, *, fields=None, headers=None, detail=None):
     code, message = MESSAGES.get(status, ("http_error", "Request could not be completed"))
     safe_details = {"policy_unavailable": "The required supplier policy is missing, invalid or unsupported",
                     "publishing_disabled": "Notification publishing is disabled; the approved intent remains queued"}
+    from app.services.agent_registry import AGENT_ERROR_MESSAGES
+    safe_details.update(AGENT_ERROR_MESSAGES)
     safe_details.update(EXTERNAL_ERROR_MESSAGES)
     if status == 503 and isinstance(detail, dict) and detail.get("code") in safe_details:
         code = detail["code"]
@@ -41,6 +43,12 @@ def error_response(request, status, *, fields=None, headers=None, detail=None):
 
 
 def install_http_contract(app: FastAPI):
+    from app.services.agent_registry import AgentUnavailable
+
+    @app.exception_handler(AgentUnavailable)
+    async def agent_unavailable(request, exc):
+        return error_response(request, 503, detail={'code': exc.public_code})
+
     @app.middleware("http")
     async def correlate(request: Request, call_next):
         trace = str(uuid4())  # Never log or adopt a caller-supplied trace ID.

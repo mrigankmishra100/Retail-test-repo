@@ -112,16 +112,20 @@ class EnterpriseAIResponsesClient:
                                        conversation_id=conversation_id, tools=tools)
 
     def create_response_sync(self, messages, conversation_id=None, tools=None, require_file_search=False):
+        return self._traced_response(messages, conversation_id=conversation_id, tools=tools, require_file_search=require_file_search)
+
+    def _traced_response(self, messages, conversation_id=None, tools=None, require_file_search=False):
         """Synchronous boundary for sync LangGraph nodes; native OCI function calling."""
         if self.observability is None:
             return self._create_response_sync(messages, conversation_id=conversation_id, tools=tools, require_file_search=require_file_search)
         from app.observability.context import TraceContext, request_trace_id
         with self.observability.observation(
-            "oci.generative_ai.response",
+            "oci.generative_ai.response" if not hasattr(self, "provider") else f"{self.provider}.generation",
             as_type="generation",
             input={"messages": messages, "conversation_id": conversation_id,
                    "tool_names": [tool.get("name") for tool in tools or ()]},
-            metadata={"provider": "oci", "model": self.model_id, "api_mode": self.api_mode},
+            metadata={"provider": getattr(self, "provider", "oci"), "model": self.model_id,
+                      "api_mode": {"gemini": "generate_content", "anthropic": "messages"}.get(getattr(self, "provider", "oci"), self.api_mode)},
             context=TraceContext(trace_id=request_trace_id.get(), conversation_id=conversation_id,
                                  agent="retail"),
             model=self.model_id,

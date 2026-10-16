@@ -20,6 +20,19 @@ def official_costs(session=Depends(retail_session)):
 def central_logs(hours: Literal['1', '6', '24'] = Query('1'), session=Depends(retail_session)):
     return get_container().central_logs.search(hours=int(hours))
 
+@router.get('/tracing')
+def tracing(session=Depends(retail_session)):
+    container = get_container()
+    tracing = container.langfuse
+    return {
+        'status': 'configured' if tracing.is_configured else 'disabled',
+        'dashboard_url': tracing.base_url if tracing.is_configured else None,
+        'environment': tracing.environment,
+        'scope': 'This backend service',
+        'message': 'Configured for asynchronous export. Open Langfuse to verify received traces; configure each deployed agent and MCP service separately.' if tracing.is_configured else 'Set the self-hosted Langfuse URL and project keys in private runtime configuration, enable tracing, and restart each server service.',
+    }
+
+
 @router.get('/routing')
 def routing(session=Depends(retail_session)):
     container = get_container()

@@ -62,6 +62,16 @@ def build_configs(env, service_keys):
                      'ENTERPRISE_AI_GUARDRAILS_TIMEOUT_SECONDS'):
             if env.get(name):
                 common[name] = env[name]
+    tracing_enabled = str(env.get('LANGFUSE_TRACING_ENABLED', 'false')).lower() == 'true'
+    if tracing_enabled:
+        required_tracing = ('LANGFUSE_BASE_URL', 'LANGFUSE_PUBLIC_KEY', 'LANGFUSE_SECRET_KEY')
+        if any(not env.get(name) for name in required_tracing):
+            raise ValueError('Enabled Langfuse requires BASE_URL, PUBLIC_KEY and SECRET_KEY')
+        common.update({name: env[name] for name in required_tracing})
+        common['LANGFUSE_TRACING_ENABLED'] = True
+        for name in ('LANGFUSE_ENVIRONMENT', 'LANGFUSE_RELEASE', 'LANGFUSE_HTTP_PROXY'):
+            if env.get(name):
+                common[name] = env[name]
     ai = {
         'ENTERPRISE_AI_API_MODE': 'responses',
         'ENTERPRISE_AI_AUTH_MODE': 'genai_api_key',

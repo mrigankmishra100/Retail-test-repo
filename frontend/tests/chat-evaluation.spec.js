@@ -923,3 +923,18 @@ test('missing live telemetry does not prevent the chat answer or replay its requ
   await expect(page.locator('.activity-content')).toContainText('Detailed activity is unavailable');
   expect(state.calls.filter((call) => call.path === '/chat')).toHaveLength(1);
 });
+
+
+test('Langfuse shows configuration scope and opens the self-hosted dashboard', async ({ page }, info) => {
+  await setup(page);
+  await page.route('**/api/chat/tracing', route => route.fulfill({ json: {
+    status: 'configured', scope: 'This backend service', dashboard_url: 'https://tracing.example.invalid',
+    message: 'Configured for asynchronous export. Open Langfuse to verify received traces.'
+  } }));
+  await openEvaluation(page, 'Cloud monitoring');
+  const tracing = page.getByRole('region', { name: 'Langfuse tracing', exact: true });
+  await expect(tracing).toContainText('configured - This backend service');
+  await expect(tracing).toContainText('verify received traces');
+  await expect(tracing.getByRole('link', { name: 'Open Langfuse' })).toHaveAttribute('href', 'https://tracing.example.invalid');
+  await page.screenshot({ path: info.outputPath('langfuse-monitoring.png'), fullPage: true });
+});

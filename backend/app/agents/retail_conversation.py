@@ -97,9 +97,12 @@ def build_retail_conversation_graph(*, responses, tools, conversation_id=None, g
 
     def model(state):
         CaseService._session(tools.session).require_role("retail-manager")
-        if state["model_count"] >= MAX_MODEL_CALLS or len(json.dumps(state["messages"])) > MAX_CONTEXT_CHARS:
+        if len(json.dumps(state["messages"])) > MAX_CONTEXT_CHARS:
             return {"calls": [], 'continue_after_retrieval': False, "llm_status": "limit_reached",
-                    "answer": "The assistant reached its request limit. Please ask a narrower question."}
+                    "answer": "This question and its context are too large. Start a new chat or ask a narrower question."}
+        if state["model_count"] >= MAX_MODEL_CALLS:
+            return {"calls": [], 'continue_after_retrieval': False, "llm_status": "limit_reached",
+                    "answer": "The assistant reached the model-call limit for this question. Please ask a narrower question."}
         messages = state['messages']
         options = {'tools': definitions}
         if native_rag and state['model_count'] == 0:

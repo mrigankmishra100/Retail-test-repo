@@ -257,8 +257,11 @@ class Settings(JsonSettingsMixin, BaseSettings):
             if (not re.fullmatch(r"[a-z0-9_-]{1,40}", self.langfuse_environment)
                     or self.langfuse_environment.startswith("langfuse")):
                 raise ValueError("LANGFUSE_ENVIRONMENT must be a valid lowercase environment name")
-            if self.langfuse_base_url and not self.langfuse_base_url.startswith(("http://", "https://")):
-                raise ValueError("LANGFUSE_BASE_URL must use HTTP or HTTPS")
+            from urllib.parse import urlsplit
+            url = urlsplit(self.langfuse_base_url or '')
+            if self.langfuse_base_url and (url.scheme not in {'http', 'https'} or not url.hostname
+                    or url.username is not None or url.password is not None or url.query or url.fragment):
+                raise ValueError("LANGFUSE_BASE_URL must be an HTTP(S) URL without credentials, query or fragment")
             missing.extend(self._missing(
                 "Langfuse tracing",
                 LANGFUSE_BASE_URL=self.langfuse_base_url,

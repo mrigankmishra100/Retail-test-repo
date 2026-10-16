@@ -21,6 +21,7 @@ export default function CloudOperations({ active, records, models }) {
   const [revision, refresh] = useState(0), [hours, setHours] = useState(1);
   const [query, setQuery] = useState(''), [filter, setFilter] = useState('all'), [selected, setSelected] = useState(null);
   const logs = useResource(() => active ? api.centralLogs(hours) : Promise.resolve(null), [active, revision, hours]);
+  const tracing = useResource(() => active ? api.tracing() : Promise.resolve(null), [active, revision]);
   const events = logs.data?.events || [];
   const visible = events.filter((event) => (filter !== 'errors' || isError(event)) &&
     `${eventName(event)} ${Object.values(event).map((value) => text(value, '')).join(' ')}`.toLowerCase().includes(query.toLowerCase()));
@@ -48,6 +49,15 @@ export default function CloudOperations({ active, records, models }) {
         </details>
       </article>
     </div>
+    <section className="langfuse-tracing" aria-label="Langfuse tracing">
+      <div className="evaluation-subheading"><h4>Langfuse tracing</h4>
+        {tracing.data?.status === 'configured' && /^https?:\/\//i.test(tracing.data?.dashboard_url || '') &&
+          <a href={tracing.data.dashboard_url} target="_blank" rel="noopener noreferrer">Open Langfuse</a>}
+      </div>
+      <ErrorNotice error={tracing.error} retry={tracing.reload} />
+      <p>{tracing.loading ? 'Reading tracing configuration...' : tracing.data ? `${label(tracing.data.status)} - ${tracing.data.scope}` : 'Tracing status unavailable'}</p>
+      <p className="muted">{tracing.data?.message}</p>
+    </section>
     <section className="cloud-log-details" aria-label="OCI application events">
       <div className="cloud-log-toolbar"><h4>OCI application events</h4>
         <label>Time range<select aria-label="Log time range" value={hours} onChange={(e) => { setHours(Number(e.target.value)); setSelected(null); }}>

@@ -104,14 +104,20 @@ class RemoteAgentClient:
             status = exc.code
             remote_trace = exc.headers.get('X-Trace-ID')
             external_code = None
-            if status == 503 and operation in {'connect_model', 'discover_models'}:
+            agent_code = None
+            if status == 503:
                 from app.enterprise_ai.external import EXTERNAL_ERROR_MESSAGES
                 try:
                     code = json.loads(exc.read(4096)).get('error', {}).get('code')
+                    from app.services.agent_registry import AGENT_ERROR_MESSAGES
+                    if code in AGENT_ERROR_MESSAGES: agent_code = code
                     if code in EXTERNAL_ERROR_MESSAGES: external_code = code
                 except Exception:
                     pass
             exc.close()
+            if agent_code:
+                from app.services.agent_registry import AgentUnavailable
+                raise AgentUnavailable(code=agent_code) from None
             if external_code:
                 from app.enterprise_ai.external import ExternalModelUnavailable
                 raise ExternalModelUnavailable(external_code) from None
