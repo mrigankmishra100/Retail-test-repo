@@ -135,12 +135,13 @@ class CaseService:
                                    for row in tx.run("decisions", case_id=case_id)]
             return result
 
-    def list_cases(self, *, session, limit=50, offset=0):
+    def list_cases(self, *, session, limit=50, offset=0, pending_only=False):
         self._session(session)
         if not 1 <= limit <= 100 or not 0 <= offset <= 10000:
             raise ValueError("Invalid pagination")
         rows = self.database.fetch_all("cases_page", {"supplier_id": session.supplier_id,
-                                                     "page_size": limit + 1, "offset": offset})
+                                                     "page_size": limit + 1, "offset": offset,
+                                                     "pending_status": ('AWAITING_SUPPLIER_APPROVAL' if session.role == 'supplier' else 'AWAITING_MANAGER_APPROVAL') if pending_only else None})
         return dict(items=rows[:limit], limit=limit, offset=offset, has_more=len(rows)>limit)
 
     def draft_supplier_email(self, case_id, *, session):

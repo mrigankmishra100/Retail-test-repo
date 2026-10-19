@@ -422,7 +422,7 @@ function Workspace({ session, onLogout }) {
         <ErrorNotice error={logout.error} />
         {page === 'overview' && <Overview {...shared} />}
         {page === 'activity' && <RequestActivity {...shared} />}
-        {page === 'agent-registry' && <AgentRegistry />}
+        {page === 'agent-registry' && <AgentRegistry session={session} />}
         <div className="chat-page-slot" hidden={page !== 'assistant'}>
           <AgentChat key={currentChat.id} {...shared} chatId={currentChat.id} initialChat={currentChat.snapshot} onSaveChat={saveChat} onNewChat={createChat} active={page === 'assistant'} />
         </div>

@@ -24,6 +24,7 @@ SCOPE_INSTRUCTIONS = """
 Classify whether the latest user request belongs to this Retail Inventory app.
 Return exactly IN_SCOPE, OUT_OF_SCOPE, or CLARIFY. Do not answer the question.
 IN_SCOPE includes inventory, sales, suppliers, policies, replenishment, approvals,
+delivery options, distributors, shipping and logistics for supplier orders,
 and explanations/troubleshooting of this app's workflows, database usage, MCP,
 tools, security, models, evaluation, logging, deployment and architecture.
 Greetings and follow-ups to an in-scope exchange are IN_SCOPE. Use recent history

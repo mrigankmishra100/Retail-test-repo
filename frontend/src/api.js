@@ -92,6 +92,10 @@ export const api = {
   ready: () => request('/ready'),
   registryAgents: (offset = 0) => request(`/registry/agents?limit=20&offset=${offset}`),
   registerAgent: (body) => request('/registry/agents', { method: 'POST', body }),
+  deliveryConnectionStatus: () => request('/registry/agents/delivery-connection'),
+  deleteAgent: (id) => request(`/registry/agents/${id}`, { method: 'DELETE' }),
+  connectDeliveryAgent: (id, api_token) => request(`/registry/agents/${id}/delivery-connection`, { method: 'POST', body: { api_token } }),
+  disconnectDeliveryAgent: (id) => request(`/registry/agents/${id}/delivery-connection`, { method: 'DELETE' }),
   setAgentActive: (id, active) =>
     request(`/registry/agents/${id}/${active ? 'activate' : 'deactivate'}`, { method: 'POST' }),
   risks: (horizon) => request(`/inventory/risks?${query({ horizon_days: horizon })}`),

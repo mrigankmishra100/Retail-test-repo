@@ -126,7 +126,11 @@ export default function AgentChat({ session, thread, setThread, onChange, chatTa
     const text = input.trim();
     if (!text || action.busy) return;
     setInput('');
-    if (/^(hi|hello|hey|good\s+(morning|afternoon|evening))[!.\s]*$/i.test(text)) {
+    const greeting = /^(hi|hello|hey|good\s+(morning|afternoon|evening))[!.\s]*$/i.test(text);
+    if (!retail && greeting) {
+      setConversation(null); setUseRequestContext(false); setView('idle'); setAssessment(false);
+    }
+    if (retail && /^(hi|hello|hey|good\s+(morning|afternoon|evening))[!.\s]*$/i.test(text)) {
       setConversation(null);
       setUseRequestContext(false);
       setView('idle');
@@ -144,34 +148,28 @@ export default function AgentChat({ session, thread, setThread, onChange, chatTa
       prepareAssessment(text);
       return;
     }
-    if (/\b(approve|reject|send|dispatch|complete|confirm)\b/i.test(text)) {
+    if (retail && /\b(approve|reject|send|dispatch|complete|confirm)\b/i.test(text)) {
       say(text, 'user');
       say('Please use the review and decision controls on the current request below. A chat message alone never approves, rejects, or sends a request.');
       if (selected) setView('request');
       else { setShowRequests(true); setView('requests'); }
       return;
     }
-    if (/\b(requests?|status|updates?|incoming)\b/i.test(text)) {
+    if (retail && /\b(requests?|status|updates?|incoming)\b/i.test(text)) {
       listRequests(text);
       return;
     }
     say(text, 'user');
-    if (!retail) {
-      setShowRequests(true);
-      setView('requests');
-      say('Open an assigned request below to ask the supplier agent to check stock, policy, and quote feasibility. You can review and approve its response here. For request history, use Request Activity.');
-      return;
-    }
     const answerId = crypto.randomUUID();
     say('', 'assistant', { id: answerId, pending: true });
     const result = await action.run('conversation', () => api.chat({
       message: text, intent: 'conversation',
-      ...(modelProfile ? { model_profile: modelProfile, use_file_search: fileSearch } : {}),
-      ...(conversation ? { conversation_id: conversation } : {}),
+      ...(retail && modelProfile ? { model_profile: modelProfile, use_file_search: fileSearch } : {}),
+      ...(conversation && !greeting ? { conversation_id: conversation } : {}),
       ...(useRequestContext && view === 'request' && thread && workflow?.case?.case_id === selected ? { workflow_thread_id: thread } : {}),
     }, answerId));
     if (result) {
-      setMessages((current) => current.map((entry) => entry.id === answerId ? { ...entry, pending: false, message: result.message, mode: result.mode, llm_status: result.llm_status, used_tools: result.used_tools, metrics: result.metrics, guardrail_status: result.guardrail_status, security_event_id: result.security_event_id, security_details: result.security_details } : entry));
+      setMessages((current) => current.map((entry) => entry.id === answerId ? { ...entry, pending: false, message: result.message, mode: result.mode, llm_status: result.llm_status, used_tools: result.used_tools, metrics: result.metrics, guardrail_status: result.guardrail_status, security_event_id: result.security_event_id, security_details: result.security_details, request_page: result.request_page } : entry));
       if (result.conversation_id) setConversation(result.conversation_id);
     } else {
       setMessages((current) => current.map((entry) => entry.id === answerId ? { ...entry, pending: false, message: 'This request did not return an answer. See the error below before retrying.' } : entry));
@@ -273,8 +271,15 @@ export default function AgentChat({ session, thread, setThread, onChange, chatTa
               {m.workflowRun && <WorkflowHistory run={m.workflowRun} />}
               {m.role === 'assistant' && <SecurityDecision details={m.security_details} status={m.guardrail_status} />}
               {m.message && (m.role === 'assistant' ? (!['BLOCKED', 'FAILED'].includes(m.guardrail_status) && <Markdown>{m.message}</Markdown>) : <p>{m.message}</p>)}
-              {m.mode && !['BLOCKED', 'FAILED'].includes(m.guardrail_status) && <Badge>{['unavailable', 'disabled', 'limit_reached'].includes(m.llm_status) ? 'Answer unavailable' : m.mode === 'llm_read_only' ? 'Model-assisted answer' : 'Verified workflow facts'}</Badge>}
+              {m.mode && !['BLOCKED', 'FAILED'].includes(m.guardrail_status) && <Badge>{['unavailable', 'disabled', 'limit_reached'].includes(m.llm_status) ? 'Answer unavailable' : m.mode === 'delivery_answer' ? 'Delivery agent response' : m.mode === 'llm_read_only' ? 'Model-assisted answer' : 'Verified workflow facts'}</Badge>}
               {m.guardrail_status === 'PASSED' && <small className="security-indicator">Prompt injection check passed</small>}
+              {m.request_page && <div aria-label="Assigned requests returned by agent">
+                {m.request_page.items.map(c => <div className="activity-row" key={c.case_id}>
+                  <div><strong>{c.item_id} · {number(c.recommended_quantity)} units</strong><small>Request #{c.case_id.slice(0, 8)}</small></div>
+                  <Status value={c.status} /><button onClick={() => openRequest(c.case_id)}>Review request</button>
+                </div>)}
+                {m.request_page.has_more && <p>Showing the first page. Ask for more requests or open Request Activity to browse all requests.</p>}
+              </div>}
               {m.metrics?.queries?.length > 0 && <QueryDetails queries={m.metrics.queries} />}
               {m.used_tools?.length > 0 && <small>Checked with: {m.used_tools.join(', ')}</small>}
               {m.role === 'assistant' && <ChatActivity runs={m.workflowRun ? [m.workflowRun] : activityRuns.filter((run) => run.client_message_id === m.id)} answerStatus={m.llm_status} guardrailStatus={m.guardrail_status} />}

@@ -1,10 +1,23 @@
 {
-  "recorded_on": "2026-10-15",
+  "recorded_on": "2026-10-19",
   "release_kind": "source_only",
   "source_repository": "https://github.com/ORA-AIMLCOE/retail-inventory-agent",
   "source_branch": "V5",
   "source_commit": "f81835afaaebc02b0edbf8c1bd4555df71ad9397",
-  "destination_branch": "Retail-Inventory-Demo",
+  "destination_branch": "R-I-Cloudworld",
+  "base_branch": "Retail-Inventory-Demo",
+  "base_commit": "9dd3fcad02fb9f3e3eb7b5e64368ea1625b22ddd",
+  "verification": {
+    "python_tests": 609,
+    "python_subtests": 9,
+    "registry_browser_tests": 15,
+    "chat_browser_tests": 21,
+    "frontend_production_build": "passed",
+    "dashboard_snapshot_five_services": "passed_offline_10_cases_us_ashburn_1",
+    "latest_private_dashboard_branch": "not_accessible_not_verified",
+    "oci_deployment": "pending",
+    "container_image_builds_for_this_release": "not_run_rebuild_all_five_from_source"
+  },
   "compatibility": [
     "Five-service source-build contract retained",
     "Portable public bases and Oracle Thick client retained",
@@ -16,7 +29,7 @@
     "Latest permission, region and authenticated runtime-probe overlays validated",
     "Bundled database schema and supplier policy documents match"
   ],
-  "verification": {
+  "historical_verification_2026_10_15": {
     "focused_app_python_tests": 125,
     "focused_dashboard_python_tests": 139,
     "dashboard_tests_skipped": 2,
@@ -30,5 +43,5 @@
     "live_notification_publish": "not_tested",
     "docker_save": "passed_all_five_images_exported_to_discard_sink"
   },
-  "dashboard_commit": "4900f90ca3cae3f40634c39169e52694762f81ed"
+  "historical_dashboard_commit_2026_10_15": "4900f90ca3cae3f40634c39169e52694762f81ed"
 }

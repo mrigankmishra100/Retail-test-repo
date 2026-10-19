@@ -46,6 +46,8 @@
 .registry-optional, .registry-agent-details { font-size: 11px; color: #736a60; }
 .registry-optional summary, .registry-agent-details summary { cursor: pointer; }
 .registry-optional label { margin-top: 10px; }
+.registry-form label.checkbox { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.registry-form label.checkbox input { width: auto; }
 .registry-agent-details { margin-top: 7px; }
 .registry-agent-details p { margin: 10px 0; font-size: 11px; }
 .registry-agent-details span { display: block; margin: 10px 0 5px; font-size: 10px; }
@@ -72,3 +74,4 @@
   padding: 16px 20px;
   font-size: 12px;
 }
+.registry-actions { display: flex; flex-wrap: wrap; gap: 8px; }

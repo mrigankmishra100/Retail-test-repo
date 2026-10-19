@@ -7,7 +7,7 @@ private repository history, credentials and runtime configuration are not import
 
 Use this source URL in the one-click dashboard and select all five services:
 
-https://github.com/mrigankmishra100/Retail-test-repo/tree/Retail-Inventory-Demo
+https://github.com/mrigankmishra100/Retail-test-repo/tree/R-I-Cloudworld
 
 The dashboard resolves the branch to an immutable commit and builds the source
 using `deployment/source-build.json`. It creates the resources, private runtime
@@ -40,6 +40,49 @@ OCI ApplyGuardrails stays enabled on chat prompts through the source retail imag
 `CHAT_PROMPT_GUARDRAILS_ENABLED=true` default. Private runtime overrides still apply.
 Old images and already resolved deployment runs do not acquire new branch changes.
 See [deployment parity and analysis behavior](docs/model-operations.md).
+
+## Supplier chat and registry update (2026-10-19, R-I-Cloudworld)
+
+Supplier typed prompts now reach the backend instead of browser-only canned replies.
+The supplier conversation applies OCI input guardrails, restricts tools to the
+authenticated supplier, and filters pending approvals before pagination. Source
+supplier and MCP images enable `CHAT_PROMPT_GUARDRAILS_ENABLED=true` independently
+of the dashboard's older disabled flag. Rebuild all five services together.
+
+The reviewed dashboard leaves supplier inference disabled. In that topology the
+supplier worker delegates a typed `answer_supplier_question` call to the already
+AI-configured MCP service, where guardrails and the supplier-only conversation run.
+No retail identity or retail tool permissions are borrowed. Locally, configured
+supplier inference executes directly. Native shared File Search is not used for
+supplier chat; policy access remains supplier scoped. Session chat context is kept
+in the configured cache (last 20 messages, at most 120,000 characters, session TTL;
+process memory when Redis is absent),
+while the browser keeps the visible transcript. OCI guardrail IAM access is needed
+on the service executing the checks. Explicit private configuration can override
+image defaults. Validate resource-principal access after deployment.
+
+AWS delivery REST registration and a supplier-only `ask_delivery_agent` tool are now
+included in this source release. See the
+[delivery REST contract and setup](docs/delivery-agent-rest-contract.md) for the AWS
+owner and deployment steps. Choose CUSTOM and any name (for example Delivery agent),
+select **Use for delivery questions in this session**, and optionally enter its bearer
+token before clicking **Register agent**. This saves the connection in the same UI
+action. Blank means no Authorization header; the current distributor endpoint still
+requires its token. Existing entries can be connected or reconnected from their row.
+That connection selects
+the destination; names and registration alone do not route chat. Custom registration
+needs no Delivery schema migration. Legacy DELIVERY entries remain supported.
+Registry changes, connections and REST calls have dedicated Langfuse observations
+when existing runtime tracing is configured. Hosted delivery connections use the
+existing Oracle app database when Redis is absent, so gateway and MCP share them.
+The connection table is created on first use; migration 006 is the owner-run
+alternative where CREATE TABLE is not permitted. Local development retains memory.
+The distributor adapter now matches the owner's `/aws-app/api/v1/answers`
+question/answer API, supports its HTTPS public IP on port 8081, and retains source
+references. Supplier chat displays the API answer directly without a model rewrite
+or app-added demo disclaimer; source/demo metadata remains in tool results and tracing.
+Live bearer authentication and response
+validation passed locally; hosted OCI end-to-end verification remains pending.
 
 ## Initial source-release verification (historical)
 

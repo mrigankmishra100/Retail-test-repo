@@ -1,5 +1,98 @@
 # V5 one-click deployment test
 
+## Cloudworld update: supplier and delivery chat (2026-10-19)
+
+The release branch is `R-I-Cloudworld`, created from the Demo checkout. Rebuild all five source services
+together after releasing these changes. The release notes below describe historical
+checks; they do not verify this new code in a live tenancy.
+
+Supplier and MCP source images enable dedicated chat prompt guardrails. The supplier
+worker delegates chat to the configured MCP model when the dashboard leaves supplier
+inference disabled. The Delivery REST tool runs under the signed supplier identity
+and reads its private session connection from the same store as the gateway:
+configured Redis, or the existing Oracle app database when resource-principal
+deployment has no Redis endpoint. Local development keeps the memory cache.
+No new dashboard flags or embedded credentials are required.
+
+The distributor adapter uses POST `/aws-app/api/v1/answers` with a `question`
+body and an optional bearer integration token saved during registration. Public HTTPS IPs and
+custom ports are supported with certificate verification. The supplied endpoint
+on port 8081 passed a live adapter test locally. Preserve outbound access to that
+port and register/connect the token after deployment; source changes alone do not
+register the external service or share supplier sessions. Its current knowledge is
+fictional demo data; that metadata stays in tool results and tracing. Supplier chat
+displays the API answer directly, without a model rewrite or app-added disclaimer.
+Rebuild gateway, agents, MCP and
+frontend together; old image archives do not include this contract update.
+
+The dashboard may use its own bundled schema. Custom registration works with its
+existing registry table and needs no Delivery DDL or migration 005. Legacy DELIVERY
+entries remain supported. In a supplier session, register an active Custom entry,
+select **Use for delivery questions in this session**, and enter **Bearer token
+(optional)** before submitting. Blank creates an unauthenticated connection; the
+external API must allow that. The current distributor endpoint requires a token.
+Existing entries retain Connect delivery API for reconnecting. The selected entry and token
+are stored together in the private session connection store and take effect immediately without
+changing runtime configuration or rebuilding images. One selected delivery connection
+per supplier session; connecting another replaces the prior connection. Reconnect
+after session expiry or upgrading old connections. Existing Langfuse settings enable
+registry, connection and REST observations; credentials are omitted and unavailable
+telemetry does not block application work.
+Supplier delivery capability is now checked per turn; unconnected/inactive entries
+are not advertised as available tools or carrier catalogs. This is application
+code, shared by local execution and hosted supplier-to-MCP delegation. Rebuild the
+updated source services; existing images do not gain this behavior from a flag.
+See [the delivery contract](docs/delivery-agent-rest-contract.md) for endpoint,
+token, session setup, network requirements and AWS-owner responsibilities.
+
+The registry now reads delivery connection status from the authenticated backend
+and displays a persistent session badge plus inline connection errors. The token
+input intentionally clears after submission. Deploy the matching frontend and
+gateway together for `GET /registry/agents/delivery-connection`; an older gateway
+cannot serve this status route. Locally, restart the backend and refresh the UI.
+This confirms cached configuration; remote API authorization is checked on use.
+
+The reviewed dashboard snapshot does not configure Redis. The app therefore
+creates the additive `delivery_connections` table in the existing Oracle app
+schema on first use. Its creation grant is provided/checked by that snapshot's
+schema setup. No dashboard edits are required. If the schema owner has removed
+CREATE TABLE permission, they can apply `database/migrations/006_delivery_connections.sql`
+once for a fresh table. The app also upgrades earlier credential-only connection tables
+with an explicit `auth_mode` and nullable token; existing connections remain bearer-authenticated.
+No dashboard schema edit is required. Tokens never enter images, registry list responses or model prompts. Reads
+enforce expiry and connection operations remove expired rows; active tokens are
+deleted on Disconnect. This fallback is specific to delivery connections; general
+session and workflow state still require shared Redis for multiple replicas.
+
+Registry entries can now be deleted after deactivation and confirmation. The
+authenticated DELETE route removes only that Oracle registry row, not the hosted
+application or chat history. No schema migration or dashboard change is needed;
+rebuild the frontend and gateway with the updated source. Deletion is recorded as
+`registry.delete` when Langfuse is configured. Existing delivery session bindings
+cannot invoke a deleted entry and expire with their sessions.
+
+The backend source image enables `AGENT_REGISTRY_BOOTSTRAP_ENABLED=true`. At
+startup it registers missing Retail/Supplier roles using `AGENT_ENDPOINTS` from
+deployment configuration. Existing registrations, including inactive ones, are
+preserved. Deleting the last entry of a configured role allows bootstrap to recreate
+it on restart; use deactivation to keep a role disabled. Local execution without
+bootstrap and hosted endpoints does not automatically populate these two rows.
+
+### Compatibility review on 2026-10-19
+
+The requested `Srichand-Oracle/Deployment_Automation` repository is now private.
+The newest `Deployment_optimized` commit could not be retrieved with this session's
+access. Validation uses the existing local dashboard snapshot; it must not be
+treated as verification of the latest private branch. Its manifest, five source
+build targets, generated settings, hosted supplier/MCP routing, bootstrap defaults
+and shared delivery-store selection are checked by `scripts/check_dashboard_compatibility.py`.
+Repeat that command with an updated authorized checkout before release. Start a
+fresh source inspection and rebuild all five services from the newly confirmed
+app commit; old archives and previously pinned source runs will not contain these
+changes. Cloud deployment and live Oracle DDL remain to be tested on the VM.
+
+## Historical source-release checks
+
 Updated from V5 source commit `f81835afaaebc02b0edbf8c1bd4555df71ad9397`.
 Includes OpenAI/Anthropic/Gemini model catalogs, persistent in-chat workflow-step
 snapshots and MCP control events. Existing optional Langfuse tracing, portable

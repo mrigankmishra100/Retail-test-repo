@@ -61,7 +61,29 @@ def main():
         expected = {'studio_settings_preflight': 1, 'status': 'passed', 'service': name, 'cases': len(cases)}
         assert json.loads(result.stdout.strip()) == expected, f'{name}: dashboard settings preflight failed'
         print(json.dumps({**expected, 'region': args.region, 'credentials': 'synthetic_only'}), flush=True)
-        if name == 'retail-agent':
+        if name != 'frontend':
+            shared_probe = '''import oci, os, sys, json
+os.environ.clear()
+os.environ.update(json.loads(sys.argv[1]), RETAIL_ENV_FILE='/nonexistent/parity.env', APP_CONFIG_JSON=sys.argv[2])
+from app.config import Settings
+from app.services.delivery_connections import uses_oracle_connections
+s = Settings()
+assert s.oci_cache_endpoint or uses_oracle_connections(s), 'Hosted delivery connections need shared storage'
+if sys.argv[3] == 'backend':
+    assert s.agent_registry_bootstrap_enabled and s.agent_registry_enforcement_enabled
+    assert set(s.agent_endpoints) == {'retail', 'supplier'}
+if sys.argv[3] == 'supplier-agent':
+    assert s.remote_mcp_enabled and s.remote_mcp_endpoint
+    assert 'supplier' in s.remote_mcp_service_keys
+print('hosted_connection_store_and_routing_passed')
+'''
+            for case in cases:
+                probe = subprocess.run([sys.executable, '-B', '-c', shared_probe,
+                    json.dumps(defaults[name]), json.dumps(case['settings']), name], env=environment,
+                    text=True, capture_output=True, timeout=90, check=True)
+                assert probe.stdout.strip().splitlines()[-1] == 'hosted_connection_store_and_routing_passed'
+            print(json.dumps({'service': name, 'connection_store_and_routing': 'passed', 'cases': len(cases)}), flush=True)
+        if name in {'retail-agent', 'supplier-agent', 'mcp-server'}:
             # Studio's preflight clears Docker ENV. Also check the effective runtime
             # combination so an omitted recipe field cannot silently lose our defaults.
             runtime_probe = '''import oci, os, sys, json

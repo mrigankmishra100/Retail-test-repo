@@ -21,6 +21,9 @@ STANDARD_TOOLS = frozenset(
         "get_case_approved_memory",
         "get_chat_history",
         "save_chat_turn",
+        "list_supplier_requests",
+        "answer_supplier_question",
+        "ask_delivery_agent",
     }
 )
 CONTROLLED_TOOLS = frozenset(
@@ -33,7 +36,7 @@ RETAIL_TOOLS = frozenset({"get_inventory_risk", "get_item_sales_history", "query
     "get_workflow_case", "prepare_workflow_case", "compare_workflow_suppliers", "get_case_approved_memory",
     "get_chat_history", "save_chat_turn"})
 SUPPLIER_TOOLS = frozenset({"get_supplier_inventory", "calculate_supplier_quote", "send_supplier_response",
-    "get_workflow_case", "get_case_approved_memory"})
+    "get_workflow_case", "get_case_approved_memory", "list_supplier_requests", "answer_supplier_question", "ask_delivery_agent"})
 
 
 class EnterpriseAIMCPSafetyClient:

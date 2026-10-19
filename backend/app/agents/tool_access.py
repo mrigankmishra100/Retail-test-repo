@@ -7,7 +7,7 @@ from app.services.cases import CaseService
 binding = ContextVar("internal_retail_tool_binding", default=None)
 SUPPLIER_TOOL_NAMES = frozenset({"get_supplier_inventory", "get_supplier_policy", "calculate_supplier_quote",
     "send_supplier_response", "close_replenishment_case", "get_approved_memory",
-    "get_workflow_case", "get_case_approved_memory"})
+    "get_workflow_case", "get_case_approved_memory", "list_supplier_requests", "answer_supplier_question", "ask_delivery_agent"})
 RETAIL_TOOL_NAMES = frozenset({"get_inventory_risk", "get_item_sales_history", "query_retail_data", "get_suppliers_for_item",
     "search_policy_documents",
     "get_supplier_policy", "create_replenishment_case", "send_supplier_request", "close_replenishment_case",

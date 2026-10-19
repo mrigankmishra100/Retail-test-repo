@@ -96,6 +96,7 @@ def call_remote(container, session, name, arguments):
 
     async def run():
         nonlocal stage
+        timeout = 230 if name == 'answer_supplier_question' else 45
         import httpx2
         from fastmcp import Client
         from fastmcp.client.transports import StreamableHttpTransport
@@ -109,7 +110,7 @@ def call_remote(container, session, name, arguments):
 
         def factory(**kwargs):
             kwargs['follow_redirects'] = False
-            kwargs['timeout'] = httpx2.Timeout(45, connect=10)
+            kwargs['timeout'] = httpx2.Timeout(timeout, connect=10)
             kwargs['trust_env'] = False
             hooks = dict(kwargs.get('event_hooks') or {})
             hooks['request'] = [*hooks.get('request', []), prefer_json]
@@ -120,13 +121,13 @@ def call_remote(container, session, name, arguments):
         logger.info('mcp_remote_stage', extra={**metadata, 'stage': stage})
         transport = StreamableHttpTransport(endpoint, headers={'X-MCP-Assertion': header, 'X-MCP-Call-ID':call_id},
                                              httpx_client_factory=factory)
-        async with Client(transport, timeout=45) as client:
+        async with Client(transport, timeout=timeout) as client:
             stage = 'schema_discovery'
             logger.info('mcp_remote_stage', extra={**metadata, 'stage': stage})
             await client.list_tools()
             stage = 'tool_execution'
             logger.info('mcp_remote_stage', extra={**metadata, 'stage': stage})
-            result = await client.call_tool(name, arguments, timeout=45, raise_on_error=False)
+            result = await client.call_tool(name, arguments, timeout=timeout, raise_on_error=False)
             from app.remote_activity import merge_activity
             merge_activity((result.meta or {}).get('retail_activity'), service='mcp-server', started=started)
             if result.is_error:

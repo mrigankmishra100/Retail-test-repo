@@ -1,6 +1,8 @@
 """Only AI-dependent capabilities need a model configured on the MCP worker."""
 
-# All other tools perform model-independent reads or verified state transitions.
+# Other tools perform model-independent reads or verified state transitions,
+# except answer_supplier_question, which always uses the server-owned supplier
+# baseline. It accepts no caller-selected model or provider credentials.
 # External credentials stay on the Retail worker. Its graph prepares AI drafts
 # there; delegating an AI-dependent tool with an unknown profile must still fail.
 MODEL_BOUND_TOOLS = frozenset({

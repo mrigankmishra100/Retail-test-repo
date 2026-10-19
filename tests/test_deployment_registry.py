@@ -57,6 +57,18 @@ def test_bootstrap_is_idempotent_preserves_disabled_roles_and_old_urls():
     service.require_enabled('supplier')
 
 
+def test_bootstrap_recreates_deleted_configured_role_on_restart():
+    db = BootstrapDatabase()
+    service = AgentRegistryService(db)
+    service.bootstrap({'retail': REGISTERED, 'supplier': FALLBACK})
+    retail = next(r for r in db.rows.values() if r['agent_type'] == 'RETAIL')
+    service.set_active(retail['agent_id'], False)
+    service.delete(retail['agent_id'])
+    assert len(db.rows) == 1
+    service.bootstrap({'retail': REGISTERED, 'supplier': FALLBACK})
+    assert len(db.rows) == 2 and db.rows[retail['agent_id']]['active'] == 1
+
+
 def test_bootstrap_preserves_manually_registered_inactive_entry():
     db = BootstrapDatabase()
     service = AgentRegistryService(db)

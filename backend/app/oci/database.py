@@ -53,6 +53,14 @@ class DatabaseOperation:
 
 
 READ_OPERATIONS: dict[str, DatabaseOperation] = {
+    'delivery_connection_get': DatabaseOperation(
+        sql="""SELECT agent_id,endpoint_url,api_token AS token,auth_mode FROM delivery_connections
+            WHERE connection_key=:connection_key AND expires_at>SYSTIMESTAMP""",
+        parameter_names=frozenset({'connection_key'}), kind='read'),
+    "registry_active_delivery": DatabaseOperation(
+        sql="""SELECT agent_id,name,agent_type,description,endpoint_url,active,created_at,updated_at
+            FROM agent_registry WHERE agent_type='DELIVERY' AND active=1 FETCH FIRST 2 ROWS ONLY""",
+        parameter_names=frozenset(), kind="read"),
     "registry_readiness": DatabaseOperation(
         sql="""SELECT
             (SELECT COUNT(*) FROM user_tables WHERE table_name='AGENT_REGISTRY') AS table_count,
@@ -177,8 +185,9 @@ READ_OPERATIONS: dict[str, DatabaseOperation] = {
                 ('DRAFT','AWAITING_MANAGER_APPROVAL','MANAGER_REJECTED','REQUEST_QUEUED')))
             AND EXISTS (SELECT 1 FROM replenishment_case_events e WHERE e.case_id=c.case_id
                         AND e.case_version=0 AND e.event_type='CREATED')
+            AND (:pending_status IS NULL OR c.status=:pending_status)
             ORDER BY c.created_at DESC,c.case_id DESC OFFSET :offset ROWS FETCH NEXT :page_size ROWS ONLY""",
-        parameter_names=frozenset({"supplier_id", "offset", "page_size"}), kind="read"),
+        parameter_names=frozenset({"supplier_id", "offset", "page_size", "pending_status"}), kind="read"),
     "supplier_identity": DatabaseOperation(
         sql="SELECT supplier_id FROM suppliers WHERE supplier_id = :supplier_id",
         parameter_names=frozenset({"supplier_id"}), kind="read",
@@ -323,6 +332,20 @@ READ_OPERATIONS: dict[str, DatabaseOperation] = {
 
 
 WRITE_OPERATIONS: dict[str, DatabaseOperation] = {
+    'delivery_connection_save': DatabaseOperation(
+        sql="""MERGE INTO delivery_connections d USING (SELECT :connection_key AS connection_key FROM dual) s
+            ON (d.connection_key=s.connection_key)
+            WHEN MATCHED THEN UPDATE SET d.agent_id=:agent_id,d.endpoint_url=:endpoint_url,
+                d.api_token=:token,d.auth_mode=:auth_mode,d.expires_at=SYSTIMESTAMP+NUMTODSINTERVAL(:ttl_seconds,'SECOND')
+            WHEN NOT MATCHED THEN INSERT (connection_key,agent_id,endpoint_url,api_token,auth_mode,expires_at)
+                VALUES (:connection_key,:agent_id,:endpoint_url,:token,:auth_mode,SYSTIMESTAMP+NUMTODSINTERVAL(:ttl_seconds,'SECOND'))""",
+        parameter_names=frozenset({'connection_key','agent_id','endpoint_url','token','auth_mode','ttl_seconds'}), kind='write'),
+    'delivery_connection_delete': DatabaseOperation(
+        sql='DELETE FROM delivery_connections WHERE connection_key=:connection_key AND agent_id=:agent_id',
+        parameter_names=frozenset({'connection_key','agent_id'}), kind='write'),
+    'delivery_connection_expire': DatabaseOperation(
+        sql='DELETE FROM delivery_connections WHERE expires_at<=SYSTIMESTAMP',
+        parameter_names=frozenset(), kind='write'),
     "registry_bootstrap_agent": DatabaseOperation(
         sql="""INSERT INTO agent_registry (agent_id,name,agent_type,description,endpoint_url,active)
             SELECT :agent_id,:name,:agent_type,:description,:endpoint_url,:active FROM dual
@@ -337,6 +360,9 @@ WRITE_OPERATIONS: dict[str, DatabaseOperation] = {
     "registry_set_active": DatabaseOperation(
         sql="""UPDATE agent_registry SET active=:active,updated_at=SYSTIMESTAMP WHERE agent_id=:agent_id""",
         parameter_names=frozenset({"agent_id", "active"}), kind="write"),
+    "registry_delete_agent": DatabaseOperation(
+        sql="""DELETE FROM agent_registry WHERE agent_id=:agent_id AND active=0""",
+        parameter_names=frozenset({"agent_id"}), kind="write"),
     "save_chat_turn": DatabaseOperation(
         sql="""DECLARE
                 existing_owner VARCHAR2(36);
@@ -457,7 +483,87 @@ WRITE_OPERATIONS: dict[str, DatabaseOperation] = {
 
 
 class OracleDatabaseClient:
-    """Execute only named SQL operations through a lazily created pool."""
+    """Execute named SQL operations and the fixed registry upgrade through a lazy pool."""
+
+    def ensure_delivery_connections(self):
+        """One additive table owned by the existing app schema, never dashboard SQL."""
+        with self._delivery_connections_lock:
+            if self._delivery_connections_ready:
+                return
+            with self._get_pool().acquire() as connection:
+                connection.call_timeout = 10000
+                with connection.cursor() as cursor:
+                    inspect_sql = 'SELECT connection_key,agent_id,endpoint_url,api_token,auth_mode,expires_at FROM delivery_connections WHERE 1=0'
+                    try:
+                        cursor.execute(inspect_sql)
+                    except Exception as exc:
+                        code = getattr(exc.args[0], 'code', None) if exc.args else None
+                        if code not in {904, 942}:
+                            raise
+                        if code == 904:
+                            # Upgrade the earlier credential-only table without losing
+                            # existing session connections. Concurrent services may race.
+                            try:
+                                cursor.execute("ALTER TABLE delivery_connections ADD auth_mode VARCHAR2(6) DEFAULT 'bearer' NOT NULL CHECK (auth_mode IN ('bearer','none'))")
+                            except Exception as alter_exc:
+                                if not alter_exc.args or getattr(alter_exc.args[0], 'code', None) != 1430:
+                                    raise
+                        else:
+                            try:
+                                cursor.execute('''CREATE TABLE delivery_connections (
+                                    connection_key VARCHAR2(200) PRIMARY KEY,
+                                    agent_id VARCHAR2(36) NOT NULL,
+                                    endpoint_url VARCHAR2(2000) NOT NULL,
+                                    api_token CLOB,
+                                    auth_mode VARCHAR2(6) DEFAULT 'bearer' NOT NULL CHECK (auth_mode IN ('bearer','none')),
+                                    expires_at TIMESTAMP WITH TIME ZONE NOT NULL)''')
+                            except Exception as create_exc:
+                                if not create_exc.args or getattr(create_exc.args[0], 'code', None) != 955:
+                                    raise
+                        # Also verify a table created by a competing hosted service.
+                        cursor.execute(inspect_sql)
+                    # Also finish an upgrade interrupted after adding auth_mode.
+                    cursor.execute("SELECT nullable FROM user_tab_columns WHERE table_name='DELIVERY_CONNECTIONS' AND column_name='API_TOKEN'")
+                    if cursor.fetchone()[0] == 'N':
+                        try:
+                            cursor.execute('ALTER TABLE delivery_connections MODIFY api_token NULL')
+                        except Exception as alter_exc:
+                            if not alter_exc.args or getattr(alter_exc.args[0], 'code', None) != 1451:
+                                raise
+                    cursor.parse(WRITE_OPERATIONS['delivery_connection_save'].sql)
+            self._delivery_connections_ready = True
+
+    def ensure_delivery_registry(self):
+        """Idempotent, fixed additive DDL for dashboards bundling the older registry.
+
+        Runs only on explicit Delivery registration, as the existing table owner.
+        Oracle DDL commits; no user-supplied SQL or changes to business tables.
+        """
+        with self._get_pool().acquire() as connection:
+            connection.call_timeout = 10000
+            with connection.cursor() as cursor:
+                def ddl(sql, already_applied):
+                    try:
+                        cursor.execute(sql)
+                    except Exception as exc:
+                        if getattr(exc.args[0], 'code', None) not in already_applied:
+                            raise
+
+                cursor.execute("SELECT index_name FROM user_indexes WHERE index_name='UQ_REGISTRY_ACTIVE_DELIVERY' AND table_name='AGENT_REGISTRY' AND status='VALID' AND uniqueness='UNIQUE'")
+                if not cursor.fetchone():
+                    ddl("CREATE UNIQUE INDEX uq_registry_active_delivery ON agent_registry (CASE WHEN active=1 AND agent_type='DELIVERY' THEN agent_type END)", {955})
+                cursor.execute("SELECT search_condition_vc FROM user_constraints WHERE table_name='AGENT_REGISTRY' AND constraint_name='CK_REGISTRY_TYPE'")
+                old = cursor.fetchone()
+                if old and "'DELIVERY'" not in str(old[0]):
+                    # Install the wider constraint first; there is no unconstrained window.
+                    ddl("ALTER TABLE agent_registry ADD CONSTRAINT ck_registry_delivery_roles CHECK (agent_type IN ('RETAIL', 'SUPPLIER', 'CUSTOM', 'DELIVERY'))", {2264})
+                    ddl("ALTER TABLE agent_registry DROP CONSTRAINT ck_registry_type", {2443})
+                cursor.execute("SELECT COUNT(*) FROM user_constraints WHERE table_name='AGENT_REGISTRY' AND constraint_name IN ('CK_REGISTRY_TYPE','CK_REGISTRY_DELIVERY_ROLES') AND status='ENABLED' AND validated='VALIDATED' AND search_condition_vc LIKE '%''DELIVERY''%'")
+                if cursor.fetchone()[0] != 1:
+                    raise RuntimeError('Delivery registry constraint unavailable')
+                cursor.execute("SELECT COUNT(*) FROM user_indexes WHERE index_name='UQ_REGISTRY_ACTIVE_DELIVERY' AND table_name='AGENT_REGISTRY' AND status='VALID' AND uniqueness='UNIQUE'")
+                if cursor.fetchone()[0] != 1:
+                    raise RuntimeError('Delivery registry unique index unavailable')
 
     def __init__(
         self,
@@ -493,6 +599,8 @@ class OracleDatabaseClient:
         self.tcp_connect_timeout = tcp_connect_timeout
         self._pool: Any | None = None
         self._pool_lock = Lock()
+        self._delivery_connections_lock = Lock()
+        self._delivery_connections_ready = False
 
     @property
     def is_configured(self) -> bool:

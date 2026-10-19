@@ -62,6 +62,8 @@ def chat(request: ChatRequest, session: SessionContext = Depends(current_session
             or (request.session_id is not None and request.session_id != session.session_id)):
         raise HTTPException(403, "Chat identity must match the server session")
     if request.intent == "conversation":
+        if session.role == 'supplier':
+            return invoke(get_container().supplier_conversation_service.respond, request, session=session)
         return invoke(get_container().chat_experience_service.respond, request, session=session)
     from app.services.agent_registry import enforce_agent
     invoke(enforce_agent, get_container(), 'retail' if session.role == 'retail-manager' else 'supplier')

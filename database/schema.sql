@@ -236,10 +236,24 @@ CREATE TABLE agent_registry (
     active NUMBER(1) DEFAULT 0 NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL,
-    CONSTRAINT ck_registry_type CHECK (agent_type IN ('RETAIL', 'SUPPLIER', 'CUSTOM')),
+    CONSTRAINT ck_registry_type CHECK (agent_type IN ('RETAIL', 'SUPPLIER', 'CUSTOM', 'DELIVERY')),
     CONSTRAINT ck_registry_active CHECK (active IN (0, 1))
 );
 
 CREATE UNIQUE INDEX uq_registry_active_type ON agent_registry (
     CASE WHEN active=1 AND agent_type IN ('RETAIL', 'SUPPLIER') THEN agent_type END
+);
+
+CREATE UNIQUE INDEX uq_registry_active_delivery ON agent_registry (
+    CASE WHEN active=1 AND agent_type='DELIVERY' THEN agent_type END
+);
+
+-- Private expiring integration credentials; never exposed through chat data tools.
+CREATE TABLE delivery_connections (
+    connection_key VARCHAR2(200) PRIMARY KEY,
+    agent_id VARCHAR2(36) NOT NULL,
+    endpoint_url VARCHAR2(2000) NOT NULL,
+    api_token CLOB,
+    auth_mode VARCHAR2(6) DEFAULT 'bearer' NOT NULL CHECK (auth_mode IN ('bearer','none')),
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL
 );

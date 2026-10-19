@@ -319,8 +319,9 @@ class SecurityDecision(BaseModel):
 
 
 class ChatResponse(BaseModel):
+    request_page: CasePage | None = None
     metrics: dict | None = None
-    mode: Literal["deterministic_read_only", "llm_read_only"] = "deterministic_read_only"
+    mode: Literal["deterministic_read_only", "llm_read_only", "delivery_answer"] = "deterministic_read_only"
     message: str
     approval_recorded: Literal[False] = False
     pending_approval: Literal["manager", "supplier"] | None = None

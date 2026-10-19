@@ -95,12 +95,14 @@ def dispatch(container, audience, envelope):
             raise HTTPException(403, 'Retail catalog operation required')
         return invoke(container.chat_experience_service.catalog, session=session)
     if op in {'chat', 'chat_evaluate'}:
-        if audience != 'retail':
-            raise HTTPException(403, 'Chat is not a supplier workflow operation')
         request = Chat.model_validate(payload).request
         if (request.intent != 'conversation' or (request.role and request.role != session.role)
                 or (request.session_id and request.session_id != session.session_id)):
             raise HTTPException(403, 'Chat identity or intent mismatch')
+        if audience == 'supplier':
+            if op != 'chat':
+                raise HTTPException(403, 'Supplier model comparison is unavailable')
+            return invoke(container.supplier_conversation_service.respond, request, session=session)
         return invoke(container.chat_experience_service.respond, request, session=session, evaluation=op == 'chat_evaluate')
     service = container.retail_workflow_service if audience == 'retail' else container.supplier_workflow_service
     if op == 'change_model':

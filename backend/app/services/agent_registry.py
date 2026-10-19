@@ -5,9 +5,11 @@ import logging
 from typing import Literal
 from uuid import UUID, uuid4, uuid5, NAMESPACE_URL
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.agents.remote_contract import validate_agent_endpoint
+from app.observability import LangfuseObservabilityClient, TraceContext
+from app.observability.context import request_trace_id
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +17,7 @@ logger = logging.getLogger(__name__)
 class AgentRegistration(BaseModel):
     model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
     name: str = Field(min_length=1, max_length=120)
-    agent_type: Literal["RETAIL", "SUPPLIER", "CUSTOM"]
+    agent_type: Literal["RETAIL", "SUPPLIER", "CUSTOM", "DELIVERY"]
     description: str = Field(default="", max_length=1000)
     endpoint_url: str = Field(min_length=1, max_length=2000)
     active: bool = Field(default=False, strict=True)
@@ -39,7 +41,23 @@ class AgentRegistration(BaseModel):
         if "?" in value or "#" in value or any(
                 character.isspace() or ord(character) < 32 or ord(character) == 127 for character in value):
             raise ValueError("Agent URL must not contain whitespace or control characters")
-        return validate_agent_endpoint(value)
+        return value
+
+    @model_validator(mode='after')
+    def validate_destination(self):
+        if self.agent_type == 'CUSTOM':
+            # Preserve existing OCI directory entries as well as external APIs.
+            try:
+                self.endpoint_url = validate_agent_endpoint(self.endpoint_url)
+                return self
+            except ValueError:
+                pass
+        if self.agent_type in {'CUSTOM', 'DELIVERY'}:
+            from app.services.delivery_agent import validate_delivery_url
+            validate_delivery_url(self.endpoint_url)
+        else:
+            self.endpoint_url = validate_agent_endpoint(self.endpoint_url)
+        return self
 
 
 class RegisteredAgent(AgentRegistration):
@@ -62,14 +80,19 @@ class RegistryNotFound(Exception):
     """The requested registry entry does not exist."""
 
 
+class RegistryDeleteConflict(Exception):
+    """An active registration must be deactivated before deletion."""
+
+
 def oracle_error_code(exc):
     return getattr(exc.args[0], "code", None) if exc.args else None
 
 
 class AgentRegistryService:
-    def __init__(self, database, *, enforcement_enabled=False):
+    def __init__(self, database, *, enforcement_enabled=False, observability=None):
         self.database = database
         self.enforcement_enabled = enforcement_enabled
+        self.observability = observability or LangfuseObservabilityClient()
 
     @staticmethod
     def _agent(row):
@@ -144,17 +167,52 @@ class AgentRegistryService:
                 raise RegistryConflict() from exc
             raise
 
-    def create(self, registration: AgentRegistration):
+    def create(self, registration: AgentRegistration, *, session=None):
+        with self.observability.observation('registry.create',
+                metadata={'agent_type': registration.agent_type},
+                context=self._trace_context(session)) as observation:
+            result = self._create(registration)
+            observation.update(output={'agent_id': str(result.agent_id), 'agent_type': result.agent_type,
+                'active': result.active}, metadata={'status': 'success'})
+            return result
+
+    @staticmethod
+    def _trace_context(session):
+        return TraceContext(trace_id=request_trace_id.get(),
+            session_id=str(session.session_id) if session else None,
+            role=session.role if session else None)
+
+    def _create(self, registration):
+        if registration.agent_type == 'DELIVERY':
+            # Deployment Studio may seed its own older schema. Upgrade only this
+            # optional registry capability when the first Delivery entry is added.
+            self.database.ensure_delivery_registry()
         agent_id = str(uuid4())
         self._write("registry_create_agent", {
             **registration.model_dump(), "agent_id": agent_id, "active": int(registration.active),
         })
         return self._get(agent_id)
 
-    def set_active(self, agent_id, active):
-        if not self._write("registry_set_active", {"agent_id": str(agent_id), "active": int(active)}):
-            raise RegistryNotFound()
-        return self._get(agent_id)
+    def set_active(self, agent_id, active, *, session=None):
+        with self.observability.observation('registry.activate' if active else 'registry.deactivate',
+                metadata={'agent_id': str(agent_id)}, context=self._trace_context(session)) as observation:
+            if not self._write("registry_set_active", {"agent_id": str(agent_id), "active": int(active)}):
+                raise RegistryNotFound()
+            result = self._get(agent_id)
+            observation.update(output={'agent_id': str(result.agent_id), 'active': result.active},
+                metadata={'status': 'success', 'agent_type': result.agent_type})
+            return result
+
+    def delete(self, agent_id, *, session=None):
+        with self.observability.observation('registry.delete',
+                metadata={'agent_id': str(agent_id)}, context=self._trace_context(session)) as observation:
+            # The predicate is atomic with deletion, including concurrent activation.
+            if not self._write('registry_delete_agent', {'agent_id': str(agent_id)}):
+                self._get(agent_id)  # Missing entries are 404; existing ones are active.
+                raise RegistryDeleteConflict()
+            result = {'agent_id': str(agent_id), 'deleted': True}
+            observation.update(output=result, metadata={'status': 'success'})
+            return result
 
     def active_endpoint(self, audience):
         if audience not in {"retail", "supplier"}:
@@ -177,7 +235,7 @@ class AgentRegistryService:
         if len(rows) != 1:
             raise RuntimeError("Agent registry has multiple active destinations")
         # Validate again at the outbound boundary, including DB-side edits.
-        endpoint = AgentRegistration.validate_url(rows[0]["endpoint_url"])
+        endpoint = validate_agent_endpoint(AgentRegistration.validate_url(rows[0]["endpoint_url"]))
         logger.info('agent_registry_route', extra={'agent': audience, 'source': 'registry', 'status': 'resolved'})
         return endpoint
 

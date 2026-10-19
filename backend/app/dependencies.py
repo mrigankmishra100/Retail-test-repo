@@ -191,7 +191,8 @@ class ApplicationContainer:
     @cached_property
     def agent_registry_service(self):
         from app.services.agent_registry import AgentRegistryService
-        return AgentRegistryService(self.database, enforcement_enabled=self.settings.agent_registry_enforcement_enabled)
+        return AgentRegistryService(self.database, enforcement_enabled=self.settings.agent_registry_enforcement_enabled,
+                                    observability=self.langfuse)
 
     @cached_property
     def langsmith(self) -> LangSmithObservabilityClient:
@@ -258,6 +259,14 @@ class ApplicationContainer:
         return RemoteAgentClient(audience=name, endpoint=self.settings.agent_endpoints[name],
             key=self.settings.agent_service_keys[name], timeout=self.settings.agent_timeout_seconds,
             endpoint_resolver=lambda: self._resolve_agent_endpoint(name), observability=self.langfuse)
+
+    @cached_property
+    def supplier_conversation_service(self):
+        if 'supplier' in self.settings.agent_endpoints:
+            from app.agents.remote import RemoteConversationService
+            return RemoteConversationService(self.remote_supplier_agent)
+        from app.services.supplier_conversation import SupplierConversationService
+        return SupplierConversationService(self)
 
     @activity_step('registry', 'Resolving agent from registry')
     def _resolve_agent_endpoint(self, name):

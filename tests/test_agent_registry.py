@@ -38,7 +38,7 @@ def db_error(code):
 
 def registration(**changes):
     return {"name": "Retail agent", "agent_type": "RETAIL", "description": "POC agent",
-            "endpoint_url": REGISTERED, "active": False, **changes}
+            "endpoint_url": 'https://delivery.example.com/v1/chat' if changes.get('agent_type') == 'DELIVERY' else REGISTERED, "active": False, **changes}
 
 
 class MemoryRegistryDatabase:
@@ -46,6 +46,9 @@ class MemoryRegistryDatabase:
     def __init__(self):
         self.rows = {}
         self.calls = []
+
+    def ensure_delivery_registry(self):
+        pass  # In-memory fixture enforces the same role uniqueness below.
 
     def fetch_all(self, operation, parameters=None):
         self.calls.append((operation, parameters))
@@ -67,6 +70,12 @@ class MemoryRegistryDatabase:
         self.calls.append((operation, parameters))
         OracleDatabaseClient._resolve_operation(WRITE_OPERATIONS, operation, parameters)
         agent_id = parameters["agent_id"]
+        if operation == 'registry_delete_agent':
+            row = self.rows.get(agent_id)
+            if row is None or row['active']:
+                return False
+            del self.rows[agent_id]
+            return True
         if operation == "registry_set_active" and agent_id not in self.rows:
             return False
         now = datetime.now(timezone.utc)
@@ -128,7 +137,34 @@ def test_both_roles_can_register_list_activate_and_deactivate(api, role):
         assert response.json()["active"] is active
 
 
-@pytest.mark.parametrize("agent_type", ["RETAIL", "SUPPLIER"])
+@pytest.mark.parametrize('role', ['retail-manager', 'supplier'])
+@pytest.mark.parametrize('agent_type', ['RETAIL', 'SUPPLIER', 'CUSTOM', 'DELIVERY'])
+def test_delete_only_inactive_registration(api, role, agent_type):
+    client, database, sessions = api
+    headers = auth(sessions, role)
+    agent = client.post('/registry/agents', headers=headers,
+        json=registration(agent_type=agent_type, active=True)).json()
+    path = '/registry/agents/' + agent['agent_id']
+    other = client.post('/registry/agents', headers=headers, json=registration(agent_type='CUSTOM', name='Keep me')).json()
+    assert client.delete(path).status_code == 401
+    assert client.delete(path, headers=headers).status_code == 409
+    assert agent['agent_id'] in database.rows
+    assert client.post(path + '/deactivate', headers=headers).status_code == 200
+    deleted = client.delete(path, headers=headers)
+    assert deleted.status_code == 200 and deleted.json() == {'agent_id': agent['agent_id'], 'deleted': True}
+    assert [row['agent_id'] for row in client.get('/registry/agents', headers=headers).json()['items']] == [other['agent_id']]
+    assert client.delete(path, headers=headers).status_code == 404
+    assert client.post(path + '/activate', headers=headers).status_code == 404
+    assert client.delete('/registry/agents/not-a-uuid', headers=headers).status_code == 422
+
+
+def test_delete_is_scoped_and_checks_active_state_in_sql():
+    definition = WRITE_OPERATIONS['registry_delete_agent']
+    assert definition.parameter_names == frozenset({'agent_id'})
+    assert 'WHERE agent_id=:agent_id AND active=0' in definition.sql
+
+
+@pytest.mark.parametrize("agent_type", ["RETAIL", "SUPPLIER", "DELIVERY"])
 def test_single_active_destination_and_explicit_switch(api, agent_type):
     client, _, sessions = api
     headers = auth(sessions)
@@ -318,15 +354,16 @@ def test_registry_readiness_checks_optional_table_index_and_sql(table_count, ind
     else:
         assert service._inspect_registry() == expected
     if expected == "ready":
-        assert cursor.parse.call_count == 8
+        assert cursor.parse.call_count == 10
         assert any('WHERE NOT EXISTS' in call.args[0] for call in cursor.parse.call_args_list)
+        assert any('DELETE FROM agent_registry' in call.args[0] for call in cursor.parse.call_args_list)
     else:
         database._get_pool.assert_not_called()
 
 
 def test_fresh_schema_and_migration_define_same_registry_objects():
     root = Path(__file__).resolve().parents[1]
-    schema = (root / "database/schema.sql").read_text()
+    schema = (root / "database/schema.sql").read_text().replace("'CUSTOM', 'DELIVERY'", "'CUSTOM'")
     migration = (root / "database/migrations/004_agent_registry.sql").read_text()
     for pattern in (r"CREATE TABLE agent_registry \(.*?\n\);", r"CREATE UNIQUE INDEX uq_registry_active_type .*?\n\);"):
         assert re.search(pattern, schema, re.S).group() == re.search(pattern, migration, re.S).group()

@@ -25,4 +25,4 @@ supplier's identity or data. Use MCP tools to check supplier inventory and use
 only the authenticated supplier's policy document for commercial terms. Never
 invent pricing, available inventory, or delivery capability. Draft quotations
 and responses, but never send them without supplier approval.
-""".strip()
+""".strip() + '\n\n' + APPLICATION_CONTEXT
