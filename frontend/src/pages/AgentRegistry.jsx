@@ -36,7 +36,7 @@ function DeliveryConnection({ agent, connection, onMessage }) {
   const failure = action.error ? {
     traceId: action.error.traceId,
     message: action.error.status === 422 ? 'Token was not saved. Paste the token value or Bearer followed by the token, without Authorization: or extra lines.'
-      : action.error.status === 404 || action.error.status === 405 ? 'Connection API is unavailable. Restart the backend with the latest app code.'
+      : action.error.status === 404 || action.error.status === 405 ? 'Delivery connection route is unavailable. Deploy matching frontend and backend images with the latest API routes.'
       : action.error.status === 503 ? 'Connection could not be updated. Check the backend and connection storage, then refresh the status.'
       : action.error.message,
   } : null;
@@ -46,7 +46,7 @@ function DeliveryConnection({ agent, connection, onMessage }) {
     <p>Use this agent for delivery questions in this supplier session. Its API must accept a question and return the distributor answer format. Connecting replaces this session's previous delivery connection. The token expires with the session and is never included in chat.</p>
     {saved && <p>The connection is saved on the server; saved tokens are never displayed here. API authorization is checked when you send a delivery question.</p>}
     <ErrorNotice error={failure} />
-    <ErrorNotice error={connection.error && { message: 'Could not read the saved connection. Restart an older backend or check connection storage.', traceId: connection.error.traceId }} retry={connection.reload} />
+    <ErrorNotice error={connection.error && { message: 'Could not read the saved connection. Check deployed frontend/backend versions, API routing and connection storage.', traceId: connection.error.traceId }} retry={connection.reload} />
     <form onSubmit={async (event) => {
       event.preventDefault();
       const result = await action.run(`connect-${agent.agent_id}`, () => api.connectDeliveryAgent(agent.agent_id, token));

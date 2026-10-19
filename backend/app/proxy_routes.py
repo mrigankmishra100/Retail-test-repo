@@ -4,6 +4,7 @@ from urllib.parse import parse_qsl, urlencode
 from fastapi import HTTPException
 
 ID = r'[A-Za-z0-9_-]{1,64}'
+REGISTRY_ID = r'[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}'
 ROUTES = (
     ('GET', r'health', 'status/health', set()),
     ('GET', r'ready', 'status/ready', set()),
@@ -12,6 +13,10 @@ ROUTES = (
     ('DELETE', r'sessions/me', None, set()),
     ('GET', r'registry/agents', None, {'limit', 'offset'}),
     ('POST', r'registry/agents', None, set()),
+    ('GET', r'registry/agents/delivery-connection', None, set()),
+    ('POST', rf'registry/agents/{REGISTRY_ID}/delivery-connection', None, set()),
+    ('DELETE', rf'registry/agents/{REGISTRY_ID}/delivery-connection', None, set()),
+    ('DELETE', rf'registry/agents/{REGISTRY_ID}', None, set()),
     ('POST', rf'registry/agents/{ID}/(activate|deactivate)', None, set()),
     ('POST', r'chat', None, set()),
     ('GET', rf'activity/{ID}', None, set()),

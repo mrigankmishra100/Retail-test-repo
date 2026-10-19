@@ -31,6 +31,16 @@ def main():
     parser.add_argument('--region', default='ap-hyderabad-1')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
+    # Config validation alone does not catch routes blocked by the deployed
+    # frontend proxy. Vite's permissive local proxy bypasses this boundary.
+    sys.path.insert(0, str(root / 'backend'))
+    from app.proxy_routes import integrated_target
+    from app.registry_api import router as registry_router
+    for route in registry_router.routes:
+        path = route.path.lstrip('/').replace('{agent_id}', '11111111-1111-4111-8111-111111111111')
+        for method in route.methods - {'HEAD', 'OPTIONS'}:
+            assert integrated_target(method, path, '') == path, 'Hosted registry route missing'
+    print(json.dumps({'hosted_registry_routes': 'passed'}), flush=True)
     graph_source = ast.parse((root / 'backend/app/agents/retail_conversation.py').read_text(encoding='utf-8'))
     limits = {node.targets[0].id: ast.literal_eval(node.value) for node in graph_source.body
               if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name)

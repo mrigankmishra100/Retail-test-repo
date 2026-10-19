@@ -1,5 +1,26 @@
 # V5 one-click deployment test
 
+## Hosted registry proxy correction (2026-10-19)
+
+The initial Cloudworld commit `0fe74b7` omitted delivery connection and registry
+DELETE routes from the Python frontend's integrated API allowlist. Registration
+worked, but connection status/connect/disconnect and deletion returned 404 before
+reaching the backend. Local Vite bypassed that proxy. This release adds those exact
+routes and tests the real frontend proxy against the authenticated backend API.
+
+Rebuild and replace the **frontend service image** from this updated branch; it
+contains both React assets and `app.proxy_routes`. Restarting the old image or only
+rebuilding the backend does not fix the issue. If the other four services already
+use `0fe74b7`, they need no change for this correction. Otherwise rebuild all five
+from the same new commit. Start fresh source inspection so the dashboard does not
+reuse a run pinned to the older commit. Existing registered entries can be reused:
+refresh, reconnect from that entry, and verify **Connected for this session**.
+No dashboard configuration or database migration is needed for this route fix.
+
+The compatibility checker now checks registry API routes against the hosted proxy
+allowlist as well as generated service settings. Live OCI verification of the
+replacement image is still required after deployment.
+
 ## Cloudworld update: supplier and delivery chat (2026-10-19)
 
 The release branch is `R-I-Cloudworld`, created from the Demo checkout. Rebuild all five source services
