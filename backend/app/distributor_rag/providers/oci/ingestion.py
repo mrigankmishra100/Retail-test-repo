@@ -1,4 +1,5 @@
 import hashlib
+import json
 from array import array
 from sqlalchemy import text, bindparam, Text
 from app.distributor_rag.domain.models import IngestionState, Status
@@ -31,6 +32,10 @@ class OCIIngestionProvider:
             found = connection.execute(text("SELECT COUNT(*) FROM user_tables WHERE table_name IN ('DISTRIBUTOR_CHUNKS', 'DISTRIBUTOR_INDEX')")).first()
             if not found or found[0] != 2:
                 raise ProviderError("Distributor vector tables are not prepared. Ask the administrator to complete Distributor setup.")
+            if getattr(self.settings, 'oci_vector_storage', 'native') == 'json':
+                column = connection.execute(text("SELECT data_type FROM user_tab_columns WHERE table_name='DISTRIBUTOR_CHUNKS' AND column_name='EMBEDDING'")).scalar()
+                if column != 'CLOB':
+                    raise ProviderError('Distributor JSON storage does not match the prepared schema. No tables were changed.')
 
     def start_ingestion(self, document):
         params = {"document": document.id, "owner": document.owner_id, "index": self.index_id}
@@ -54,11 +59,18 @@ class OCIIngestionProvider:
                                {"document": document.id, "owner": document.owner_id}).scalar_one()
             connection.execute(text("DELETE FROM distributor_chunks WHERE document_id=:document AND owner_id=:owner AND index_id=:index"), params)
             for number, (chunk, vector) in enumerate(zip(chunks, vectors)):
-                connection.execute(text("""INSERT INTO distributor_chunks
+                statement = text("""INSERT INTO distributor_chunks
                     (index_id, document_id, owner_id, chunk_id, content, embedding)
-                    VALUES (:index, :document, :owner, :chunk_id, :content, :vector)""").bindparams(bindparam("content", type_=Text())),
+                    VALUES (:index, :document, :owner, :chunk_id, :content, :vector)""").bindparams(bindparam("content", type_=Text()))
+                if getattr(self.settings, 'oci_vector_storage', 'native') == 'json':
+                    # Oracle 19c: bind a real CLOB, not a VARCHAR2-limited string.
+                    statement = statement.bindparams(bindparam('vector', type_=Text()))
+                    encoded = json.dumps(vector, allow_nan=False, separators=(',', ':'))
+                else:
+                    encoded = array('f', vector)
+                connection.execute(statement,
                     dict(params, chunk_id=hashlib.sha256((document.id + str(number) + chunk).encode()).hexdigest()[:24],
-                         content=chunk, vector=array("f", vector)))
+                         content=chunk, vector=encoded))
             connection.execute(text("DELETE FROM distributor_index WHERE document_id=:document AND owner_id=:owner AND index_id=:index"), params)
             connection.execute(text("""INSERT INTO distributor_index (index_id, document_id, owner_id, digest)
                 VALUES (:index, :document, :owner, :digest)"""), dict(params, digest=digest))

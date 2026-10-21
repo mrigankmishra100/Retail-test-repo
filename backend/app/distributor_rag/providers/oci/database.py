@@ -70,11 +70,14 @@ VECTOR_TABLES = {
 }
 
 
-def initialize_schema(engine):
+def initialize_schema(engine, *, vector_storage='native'):
     from app.distributor_rag.providers.oci.database_models import Base
+    if vector_storage not in {'native', 'json'}:
+        raise ValueError('Unsupported Distributor vector storage')
     # Fail before DDL if the selected database cannot execute native vector search.
-    with engine.connect() as connection:
-        connection.execute(text("SELECT VECTOR_DISTANCE(TO_VECTOR('[1,0]'), TO_VECTOR('[1,0]'), COSINE) FROM dual")).scalar_one()
+    if vector_storage == 'native':
+        with engine.connect() as connection:
+            connection.execute(text("SELECT VECTOR_DISTANCE(TO_VECTOR('[1,0]'), TO_VECTOR('[1,0]'), COSINE) FROM dual")).scalar_one()
     # DDL commits implicitly on Oracle. Each step is safe to repeat after a partial failure.
     Base.metadata.create_all(engine)
     with engine.begin() as connection:
@@ -82,6 +85,9 @@ def initialize_schema(engine):
             ON (t.id=s.id) WHEN NOT MATCHED THEN INSERT (id) VALUES (s.id)"""))
     with engine.connect() as connection:
         for name, ddl in VECTOR_TABLES.items():
+            if name == 'distributor_chunks' and vector_storage == 'json':
+                ddl = ddl.replace('embedding VECTOR(*, FLOAT32) NOT NULL',
+                                  'embedding CLOB NOT NULL CHECK (embedding IS JSON)')
             exists = connection.execute(text("SELECT COUNT(*) FROM user_tables WHERE table_name=:name"),
                                         {"name": name.upper()}).scalar_one()
             if not exists:

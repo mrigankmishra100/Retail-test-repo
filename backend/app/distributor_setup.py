@@ -13,16 +13,18 @@ from app.distributor_rag.providers.oci.database import VECTOR_TABLES, initialize
 from app.distributor_rag.providers.oci.database_models import Base
 
 
-def prepare(engine, *, apply=False):
+def prepare(engine, *, apply=False, vector_storage='native'):
+    if vector_storage not in {'native', 'json'}:
+        raise ValueError('Unsupported Distributor vector storage')
     expected = set(Base.metadata.tables) | set(VECTOR_TABLES)
     existing = {name.lower() for name in inspect(engine).get_table_names()}
     found = sorted(expected & existing)
     if apply:
         if found:
             raise ValueError('Distributor tables already exist. Refusing to adopt or overwrite them; review their schema and ownership first.')
-        initialize_schema(engine)
+        initialize_schema(engine, vector_storage=vector_storage)
     return {'mode': 'applied' if apply else 'plan', 'tables': sorted(expected),
-            'already_present': found, 'retail_tables_changed': False}
+            'already_present': found, 'retail_tables_changed': False, 'vector_storage': vector_storage}
 
 
 def main():
@@ -33,7 +35,8 @@ def main():
     application = get_container()
     try:
         context = application.distributor_service.context()
-        print(json.dumps(prepare(context.engine, apply=args.apply)))
+        print(json.dumps(prepare(context.engine, apply=args.apply,
+                                 vector_storage=application.settings.distributor_vector_storage)))
     except Exception:
         parser.exit(1, 'Distributor setup failed or found existing tables. No retail tables are changed by this tool. Review access, vector support and any partially created Distributor tables.\n')
     finally:

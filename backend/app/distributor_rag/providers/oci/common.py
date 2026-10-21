@@ -37,4 +37,7 @@ def index_identity(settings):
     data = [settings.oci_embedding_model_id, settings.oci_embedding_endpoint,
             settings.oci_embedding_serving_mode, settings.oci_embedding_dimensions,
             settings.oci_chunk_chars, settings.oci_chunk_overlap, "native-text-v1"]
+    # Preserve identities of existing native indexes, never adopt them as JSON.
+    if getattr(settings, 'oci_vector_storage', 'native') == 'json':
+        data.append('bounded-json-cosine-v1')
     return hashlib.sha256(json.dumps(data).encode()).hexdigest()

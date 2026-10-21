@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "services": ["backend", "frontend"],
+  "roles": ["retail-manager", "supplier", "distributor"],
+  "distributor_vector_storage": ["json", "native"],
+  "runtime_schema_creation": false
+}

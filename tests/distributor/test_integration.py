@@ -228,6 +228,36 @@ def test_setup_plan_is_read_only_and_existing_tables_block_adoption(monkeypatch)
     initialize.assert_called_once()
 
 
+def test_19c_setup_plan_and_apply_forward_only_explicit_json_mode(monkeypatch):
+    from app import distributor_setup
+    inspector, initialize, engine = Mock(), Mock(), Mock()
+    inspector.get_table_names.return_value = ['ITEMS', 'SALES_HISTORY', 'DELIVERY_CONNECTIONS']
+    monkeypatch.setattr(distributor_setup, 'inspect', lambda engine: inspector)
+    monkeypatch.setattr(distributor_setup, 'initialize_schema', initialize)
+    plan = distributor_setup.prepare(engine, vector_storage='json')
+    assert plan['vector_storage'] == 'json' and plan['retail_tables_changed'] is False
+    assert len(plan['tables']) == 7 and not plan['already_present']
+    initialize.assert_not_called()
+    distributor_setup.prepare(engine, apply=True, vector_storage='json')
+    initialize.assert_called_once_with(engine, vector_storage='json')
+
+
+def test_19c_config_mode_survives_private_json_and_provider_mapping(monkeypatch):
+    import json
+    endpoint = 'https://inference.generativeai.us-ashburn-1.oci.oraclecloud.com'
+    monkeypatch.setenv('APP_CONFIG_JSON', json.dumps({
+        'DISTRIBUTOR_ENABLED': True, 'DISTRIBUTOR_VECTOR_STORAGE': 'json',
+        'OCI_REGION': 'us-ashburn-1', 'OCI_COMPARTMENT_ID': 'fixture-compartment',
+        'OCI_NAMESPACE': 'fixture-namespace', 'OCI_BUCKET_NAME': 'existing-bucket',
+        'DISTRIBUTOR_LLM_MODEL_ID': 'google.gemini-2.5-flash', 'DISTRIBUTOR_LLM_ENDPOINT': endpoint,
+        'DISTRIBUTOR_EMBEDDING_MODEL_ID': 'cohere.embed-v4.0', 'DISTRIBUTOR_EMBEDDING_ENDPOINT': endpoint,
+        'DISTRIBUTOR_EMBEDDING_DIMENSIONS': 1536}))
+    settings = Settings(_env_file=None)
+    mapped = provider_settings(settings)
+    assert settings.distributor_vector_storage == mapped.oci_vector_storage == 'json'
+    assert mapped.oci_embedding_dimensions == 1536
+
+
 def test_embedding_change_is_not_reported_as_ready(harness):
     _, agent, context, *_ = harness
     from app.distributor_rag.domain.models import IngestionState

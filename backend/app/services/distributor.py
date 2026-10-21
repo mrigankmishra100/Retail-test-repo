@@ -23,7 +23,8 @@ def provider_settings(settings):
         oci_llm_format=settings.distributor_llm_format,
         oci_embedding_model_id=settings.distributor_embedding_model_id,
         oci_embedding_endpoint=settings.distributor_embedding_endpoint,
-        oci_embedding_dimensions=settings.distributor_embedding_dimensions)
+        oci_embedding_dimensions=settings.distributor_embedding_dimensions,
+        oci_vector_storage=settings.distributor_vector_storage)
     if any(value is None or value == '' for value in values.values()):
         raise AppError('Distributor model, embedding and shared OCI settings must be configured.', 'not_configured', 503)
     return OCISettings(_env_file=None, **values)

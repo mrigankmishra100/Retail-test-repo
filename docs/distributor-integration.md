@@ -67,6 +67,7 @@ backend's own private configuration object**, never modify the original object:
 | `DISTRIBUTOR_EMBEDDING_MODEL_ID` | Approved embedding model ID |
 | `DISTRIBUTOR_EMBEDDING_ENDPOINT` | Trusted HTTPS OCI embedding endpoint |
 | `DISTRIBUTOR_EMBEDDING_DIMENSIONS` | Actual output dimension of that model |
+| `DISTRIBUTOR_VECTOR_STORAGE` | `json` for the existing Oracle 19c demo; `native` (default) only for databases supporting Oracle VECTOR |
 | `DISTRIBUTOR_OBJECT_PREFIX` | Dedicated `distributor/.../` prefix; default `distributor/knowledge/` |
 
 The backend reuses its existing OCI region, compartment, namespace, bucket,
@@ -75,12 +76,32 @@ supplier agent endpoints. Resource-principal mode does not load a user's key.
 The original MCP/retail/supplier endpoint mappings must remain in the new
 backend configuration. The new frontend points to the new backend.
 
-The Distributor uses **native Oracle vector search**, not the retail Enterprise
-AI File Search vector store. Therefore the embedding settings and prepared
+The Distributor uses its **own database-backed knowledge index**, not the retail
+Enterprise AI File Search vector store. Therefore the embedding settings and prepared
 Distributor knowledge cannot be inferred from the existing retail vector-store
 ID. An embedding-model change is not reported as ready until knowledge is
 indexed for that configuration. Model availability and permissions need live
 validation; local tests do not prove them.
+
+### Existing Oracle 19c database
+
+The approved local adapter uses `DISTRIBUTOR_VECTOR_STORAGE=json`. Embeddings
+are JSON arrays in a CLOB column with an `IS JSON` constraint. The backend reads
+only chunks matching the document, owner and embedding-index identity, then
+calculates exact cosine similarity and returns the best matches. It does not
+require a database upgrade, native VECTOR functions or another service.
+
+This is deliberately bounded to a small demo knowledge set: at most 1,500
+chunks per document/index. Oversized knowledge, invalid vectors and dimension
+mismatches fail rather than silently dropping data. Storage mode participates
+in the index identity, so a native index cannot be mistaken for a JSON index.
+This is not an automatic conversion of an existing Distributor schema.
+
+Retail/Supplier tables and rows are not changed by Distributor setup. Both
+versions of the Retail/Supplier app still share their existing business data,
+as requested. Do not use legacy empty-schema cleanup against the shared schema.
+
+The storage format follows Oracle's [19c JSON storage documentation](https://docs.oracle.com/en/database/oracle/oracle-database/19/adjsn/overview-of-storage-and-management-of-JSON-data.html).
 
 ## Knowledge and database safety
 
@@ -134,7 +155,8 @@ retained, with SQLAlchemy/greenlet added for Distributor.
 
 Verified locally on 2026-10-21:
 
-- `pytest tests -q`: 675 passed, 9 subtests passed, 1 live Oracle test skipped.
+- With the Oracle 19c adapter: 692 application tests and 9 subtests passed;
+  1 live Oracle test was skipped.
 - Production frontend build: passed.
 - Playwright: all 85 tests passed, including Retail/Supplier regressions and
   Distributor desktop/mobile, keyboard and accessibility checks.
@@ -145,8 +167,22 @@ Verified locally on 2026-10-21:
 Running bare `pytest` also collects an existing dashboard adapter test under
 `deployment/dashboard` that needs the separate Deployment Studio test harness
 (`test_retail_oneclick`); it is not a standalone Retail app test. Use the
-`pytest tests -q` command above for this repository's app suite. No Linux Docker
-image build or live cloud test is included in these local results.
+`pytest tests -q` command above for this repository's app suite.
+
+Additional local Ashburn preflight on 2026-10-21:
+
+- The five pinned `R-I-Cloudworld` images built on local Rancher Linux/amd64.
+- The two merged backend/frontend images, including the unpushed Oracle 19c
+  adapter, built and passed offline settings/platform/archive checks. Local
+  changes are recorded with a separate source-overlay hash, not represented as
+  already present in the GitHub base commit.
+- Small synthetic requests to `google.gemini-2.5-flash` and `cohere.embed-v4.0`
+  (1,536 dimensions) passed using the selected local Ashburn OCI identity.
+- These checks are not a successful hosted deployment or end-to-end Distributor
+  test. No application schema changes or cloud resource deletions were performed.
+- The subsequent live SQL compatibility check could not connect to the configured
+  database service (`ORA-12514`). Do not treat the mocked schema tests as live
+  Oracle setup/ingestion verification; restore a reviewed database target first.
 
 ## Before VM deployment
 
@@ -160,6 +196,7 @@ build only backend/frontend, reuse the original three agent endpoints and
 shared resource IDs, prepare private version-specific configuration, track
 borrowed versus owned resources, protect parents during cleanup, and verify
 both the original and new URLs. It must also prepare/validate Distributor
-knowledge and the approved OCI model settings. No VM rollout, image activation,
-live Oracle-vector test or live model/trace-delivery test has been performed as
-part of this local merge.
+knowledge and the approved OCI model settings. Local model access does not prove
+the new applications' resource-principal permissions. No VM rollout, image
+activation, live Distributor schema/ingestion test or trace-delivery test has
+been performed as part of this local merge.

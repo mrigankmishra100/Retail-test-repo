@@ -13,7 +13,13 @@ class JSONText(TypeDecorator):
         return json.dumps(value, ensure_ascii=False) if value is not None else None
 
     def process_result_value(self, value, dialect):
-        return json.loads(value) if value is not None else []
+        if value is None:
+            return []
+        # python-oracledb can decode IS JSON CLOB columns before SQLAlchemy's
+        # result processor runs. Do not try to JSON-decode an existing list.
+        if hasattr(value, 'read'):
+            value = value.read()
+        return json.loads(value) if isinstance(value, (str, bytes, bytearray)) else value
 
 
 class EmptyText(TypeDecorator):

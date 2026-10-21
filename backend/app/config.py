@@ -42,6 +42,7 @@ class Settings(JsonSettingsMixin, BaseSettings):
     distributor_embedding_model_id: str | None = None
     distributor_embedding_endpoint: str | None = None
     distributor_embedding_dimensions: int | None = Field(default=None, ge=1, le=16000)
+    distributor_vector_storage: Literal['native', 'json'] = 'native'
     distributor_object_prefix: str = 'distributor/knowledge/'
 
     enterprise_ai_endpoint: str | None = None

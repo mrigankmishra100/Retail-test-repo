@@ -1,4 +1,5 @@
 from pydantic import Field, model_validator
+from typing import Literal
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.distributor_rag.core.config import ROOT
 
@@ -19,6 +20,7 @@ class OCISettings(BaseSettings):
     oci_embedding_endpoint: str
     oci_embedding_serving_mode: str = "on_demand"
     oci_embedding_dimensions: int = Field(ge=1, le=16000)
+    oci_vector_storage: Literal['native', 'json'] = 'native'
     oci_embedding_set_dimensions: bool = False
     oci_chunk_chars: int = Field(default=1800, ge=200, le=12000)
     oci_chunk_overlap: int = Field(default=200, ge=0)
