@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, model_validator, ValidationError
 from app.oci.cache import OCICacheClient
 from app.oci.database import OracleDatabaseClient
 
-Role = Literal["retail-manager", "supplier"]
+Role = Literal["retail-manager", "supplier", "distributor"]
 
 
 class SessionError(PermissionError):
@@ -49,10 +49,11 @@ class SessionContext(BaseModel):
 
 class SessionService:
     def __init__(self, cache: OCICacheClient, database: OracleDatabaseClient, *,
-                 ttl_seconds: int = 3600, development: bool = True,
+                 ttl_seconds: int = 3600, development: bool = True, distributor_enabled: bool = False,
                  now=lambda: datetime.now(timezone.utc)) -> None:
         self.cache, self.database = cache, database
         self.ttl_seconds, self.development, self.now = ttl_seconds, development, now
+        self.distributor_enabled = distributor_enabled
 
     @staticmethod
     def _key(token: str) -> str:
@@ -63,6 +64,8 @@ class SessionService:
     def create(self, role: Role, supplier_id: str | None = None) -> dict:
         if not self.development:
             raise PermissionError("POC role selection is disabled outside development")
+        if role == 'distributor' and not self.distributor_enabled:
+            raise PermissionError("Distributor chat is not configured on this backend yet")
         session = SessionContext(session_id=uuid4(), role=role, supplier_id=supplier_id,
                                  expires_at=self.now() + timedelta(seconds=self.ttl_seconds))
         if role == "supplier" and not self.database.fetch_all("supplier_identity", {"supplier_id": supplier_id}):

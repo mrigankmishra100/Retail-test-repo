@@ -1,0 +1,9 @@
+/* Layout, colors, typography, bubbles and composer reuse the retail chat CSS. */
+.distributor-sources { margin-top: 12px; font-size: 12px; }
+.distributor-sources summary { cursor: pointer; color: var(--brand-dark); padding: 5px 0; }
+.distributor-sources section { margin-top: 12px; }
+.distributor-sources blockquote { margin: 8px 0; border-left: 2px solid var(--line); padding-left: 12px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); }
+.distributor-demo { font-size: 12px; color: var(--muted); }
+.distributor-thinking { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+.distributor-chat .message-body > .badge { margin-top: 8px; }
+.chat-layout .distributor-chat .chat-compose > small { color: var(--muted); }

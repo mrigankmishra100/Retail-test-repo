@@ -16,7 +16,7 @@ router = APIRouter()
 
 class SessionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    role: Literal["retail-manager", "supplier"]
+    role: Literal["retail-manager", "supplier", "distributor"]
     supplier_id: str | None = Field(default=None, pattern=r"^SUP[0-9]{3}$")
 
     @model_validator(mode="after")
@@ -28,7 +28,7 @@ class SessionRequest(BaseModel):
 
 class SessionResponse(BaseModel):
     session_id: UUID
-    role: Literal["retail-manager", "supplier"]
+    role: Literal["retail-manager", "supplier", "distributor"]
     supplier_id: str | None
     expires_at: datetime
     session_token: str
@@ -38,7 +38,7 @@ def get_session_service() -> SessionService:
     return get_container().session_service
 
 
-def current_session(authorization: str | None = Header(default=None),
+def authenticated_session(authorization: str | None = Header(default=None),
                     service: SessionService = Depends(get_session_service)) -> SessionContext:
     try:
         session = service.from_authorization(authorization)
@@ -49,6 +49,13 @@ def current_session(authorization: str | None = Header(default=None),
         raise HTTPException(401, str(exc), headers={"WWW-Authenticate": "Bearer"}) from exc
     except CacheUnavailable as exc:
         raise HTTPException(503, "Session store unavailable") from exc
+
+
+def current_session(session: SessionContext = Depends(authenticated_session)) -> SessionContext:
+    """Existing business endpoints retain their original two-role boundary."""
+    if session.role not in {'retail-manager', 'supplier'}:
+        raise HTTPException(403, "Retail-manager or Supplier session required")
+    return session
 
 
 def retail_session(session: SessionContext = Depends(current_session)) -> SessionContext:
@@ -80,13 +87,13 @@ def create_session(request: SessionRequest, response: Response,
 
 
 @router.get("/sessions/me", response_model=SessionContext)
-def get_session(response: Response, session: SessionContext = Depends(current_session)) -> SessionContext:
+def get_session(response: Response, session: SessionContext = Depends(authenticated_session)) -> SessionContext:
     response.headers["Cache-Control"] = "no-store"
     return session
 
 
 @router.delete("/sessions/me", status_code=204)
-def delete_session(authorization: str = Header(), session: SessionContext = Depends(current_session),
+def delete_session(authorization: str = Header(), session: SessionContext = Depends(authenticated_session),
                    service: SessionService = Depends(get_session_service)) -> Response:
     try:
         service.revoke(authorization.split()[1])

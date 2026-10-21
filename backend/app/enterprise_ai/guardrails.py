@@ -109,7 +109,7 @@ class EnterpriseAIGuardrailsClient:
                    "categories": [], "event_id": event_id, "stage": stage, "source": source, 'api_called': False}
         metadata = {}
         try:
-            if role not in {"retail-manager", "supplier"}:
+            if role not in {"retail-manager", "supplier", "distributor"}:
                 raise ValueError("Unsupported security role")
             if not isinstance(content, str) or not content.strip() or len(content) > self.max_chars:
                 raise ValueError("Security content outside application size bounds")

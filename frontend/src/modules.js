@@ -1,11 +1,11 @@
-// Minimal navigation shared by the retail and supplier workspaces.
+// Distributor is deliberately chat-only; other modules keep their existing roles.
 export const modules = [
   { id: 'overview', label: 'Overview', icon: 'grid', roles: ['retail-manager', 'supplier'] },
   {
     id: 'assistant',
     label: 'Agent Chat',
     icon: 'spark',
-    roles: ['retail-manager', 'supplier'],
+    roles: ['retail-manager', 'supplier', 'distributor'],
   },
   {
     id: 'evaluation',

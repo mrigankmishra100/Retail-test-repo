@@ -1,0 +1,9 @@
+from typing import Protocol
+
+from app.distributor_rag.domain.models import Document, IngestionState
+
+
+class DocumentIngestionProvider(Protocol):
+    def validate_configuration(self) -> None: ...
+    def start_ingestion(self, document: Document) -> IngestionState: ...
+    def get_ingestion_status(self, document: Document) -> IngestionState: ...

@@ -89,6 +89,8 @@ class ApplicationContainer:
 
     def close(self) -> None:
         """Close only resources that were created during this process."""
+        if 'distributor_service' in self.__dict__:
+            self.distributor_service.close()
         if "langfuse" in self.__dict__:
             self.langfuse.close()
         if "readiness_service" in self.__dict__:
@@ -118,7 +120,13 @@ class ApplicationContainer:
     def session_service(self) -> SessionService:
         return SessionService(self.cache, self.database,
                               ttl_seconds=self.settings.session_ttl_seconds,
-                              development=self.settings.app_env == "development")
+                              development=self.settings.app_env == "development",
+                              distributor_enabled=self.settings.distributor_enabled)
+
+    @cached_property
+    def distributor_service(self):
+        from app.services.distributor import DistributorService
+        return DistributorService(self)
 
     @cached_property
     def storage(self) -> OCIStorageClient:

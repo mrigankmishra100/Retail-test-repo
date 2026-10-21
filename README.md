@@ -1,5 +1,19 @@
 # Retail Inventory Agent — V5 deployment test
 
+## Distributor integration branch — local validation, not a VM rollout
+
+This branch merges the Distributor agent into the existing `R-I-Cloudworld`
+backend and adds a third, chat-only role using the retail UI's actual styles.
+Retail manager and Supplier continue to use this backend directly.
+
+See [integration scope, configuration and local tests](docs/distributor-integration.md).
+**Do not use the normal five-service deployment flow to perform the planned
+two-application update.** The deployment dashboard's side-by-side update flow,
+resource ownership checks and live OCI validation are still separate work.
+No existing application or database is changed by checking out this branch.
+
+## Existing five-service deployment (unchanged)
+
 V5 application source from `ORA-AIMLCOE/retail-inventory-agent` commit
 `d8d38dc122cbab84b3bf29b3a0ee37513a688335`, adapted for the existing Deployment
 Studio source-build contract. The public branch retains its public history;

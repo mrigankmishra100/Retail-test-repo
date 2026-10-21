@@ -28,6 +28,8 @@ router.include_router(case_router)
 router.include_router(retail_workflow_router)
 router.include_router(supplier_workflow_router)
 router.include_router(registry_router)
+from app.distributor_api import router as distributor_router
+router.include_router(distributor_router)
 
 
 class ApprovalRequest(BaseModel):

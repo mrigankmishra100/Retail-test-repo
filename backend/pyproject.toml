@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
   "fastapi", "uvicorn[standard]", "pydantic", "pydantic-settings", "httpx", "requests",
   "langgraph==1.2.11", "langgraph-checkpoint==4.2.0", "langsmith", "fastmcp==4.0.3", "oci", "oracledb", "redis", "python-dotenv", "pypdf",
+  "SQLAlchemy==2.0.44", "greenlet==3.2.4",
 ]
 
 [project.optional-dependencies]

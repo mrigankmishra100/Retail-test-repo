@@ -33,6 +33,17 @@ class Settings(JsonSettingsMixin, BaseSettings):
     oci_auth_mode: Literal['api_key', 'resource_principal', 'instance_principal'] = 'api_key'
     frontend_url: str = "http://localhost:5173"
 
+    # Opt-in, in-process Distributor RAG. Existing deployments keep their behavior.
+    # Explicit model settings: retail File Search is not an Oracle vector index.
+    distributor_enabled: bool = False
+    distributor_llm_model_id: str | None = None
+    distributor_llm_endpoint: str | None = None
+    distributor_llm_format: Literal['generic', 'generic_astra', 'cohere', 'responses', 'chat_completions'] = 'generic'
+    distributor_embedding_model_id: str | None = None
+    distributor_embedding_endpoint: str | None = None
+    distributor_embedding_dimensions: int | None = Field(default=None, ge=1, le=16000)
+    distributor_object_prefix: str = 'distributor/knowledge/'
+
     enterprise_ai_endpoint: str | None = None
     enterprise_ai_model_id: str | None = None
     chat_model_profiles: list[ChatModelProfile] = Field(default_factory=list, max_length=12)

@@ -1,5 +1,8 @@
 # Linux/amd64 dependency snapshot from the locally built Python 3.12 image.
 # Opt-in tracing dependencies recovered from the verified V4 Langfuse backend.
+# In-process Distributor RAG repository (existing runtime versions retained).
+SQLAlchemy==2.0.44
+greenlet==3.2.4
 backoff==2.2.1
 googleapis-common-protos==1.75.3
 langfuse==4.8.1

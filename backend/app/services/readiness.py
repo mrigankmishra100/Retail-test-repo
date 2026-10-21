@@ -117,6 +117,11 @@ class ReadinessService:
                 else "enabled_but_unverified" if enabled else "disabled")
         if container.settings.app_env != "development":
             checks["identity"] = "production_identity_not_implemented"
+        if getattr(container.settings, 'distributor_enabled', False):
+            try:
+                checks['distributor_knowledge'] = 'ready' if container.distributor_service.knowledge()['ready'] else 'unavailable'
+            except Exception:
+                checks['distributor_knowledge'] = 'unavailable'
         ready = not any(value in {"unavailable", "enabled_but_unverified", "production_identity_not_implemented"}
                         for value in checks.values())
         return {"status": "ready" if ready else "not_ready", "checks": checks}

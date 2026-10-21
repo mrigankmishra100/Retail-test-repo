@@ -11,6 +11,8 @@ ROUTES = (
     ('POST', r'sessions', None, set()),
     ('GET', r'sessions/me', None, set()),
     ('DELETE', r'sessions/me', None, set()),
+    ('GET', r'distributor/knowledge', None, set()),
+    ('POST', r'distributor/questions/ask', None, set()),
     ('GET', r'registry/agents', None, {'limit', 'offset'}),
     ('POST', r'registry/agents', None, set()),
     ('GET', r'registry/agents/delivery-connection', None, set()),

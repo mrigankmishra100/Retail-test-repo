@@ -7,6 +7,7 @@ import AgentChat from './pages/AgentChat';
 import RequestActivity from './pages/RequestActivity';
 import EvaluationPage from './pages/EvaluationPage';
 import AgentRegistry from './pages/AgentRegistry';
+import DistributorChat from './pages/DistributorChat';
 
 import { newSessionChat, readSessionChats, saveSessionChats, clearSessionChats } from './session-chats';
 import { hasRunningActivity } from './activity-client';
@@ -70,7 +71,7 @@ function Login({ onLogin, expired }) {
                   <Icon name={icon} />
                 </span>
                 <section>
-                  <h3>{title}</h3>
+                  <h2>{title}</h2>
                   <p>{body}</p>
                 </section>
               </div>
@@ -95,6 +96,7 @@ function Login({ onLogin, expired }) {
               {[
                 ['retail-manager', 'Retail manager', 'Inventory, sourcing, and approvals', 'grid'],
                 ['supplier', 'Supplier', 'Requests, quotes, and policy', 'people'],
+                ['distributor', 'Distributor', 'Delivery questions and source-backed answers', 'chat'],
               ].map(([value, label, description, icon]) => (
                 <label
                   className={role === value ? 'role-option selected' : 'role-option'}
@@ -206,7 +208,8 @@ export default function App() {
 }
 
 function Workspace({ session, onLogout }) {
-  const permittedPage = () => modules.find((m) => m.id === window.location.hash.slice(1) && m.roles.includes(session.role))?.id || 'overview';
+  const distributor = session.role === 'distributor';
+  const permittedPage = () => modules.find((m) => m.id === window.location.hash.slice(1) && m.roles.includes(session.role))?.id || (distributor ? 'assistant' : 'overview');
   const [page, setPage] = useState(permittedPage),
     [menu, setMenu] = useState(false),
     [collapsed, setCollapsed] = useState(() => {
@@ -269,6 +272,7 @@ function Workspace({ session, onLogout }) {
   function navigate(next, selectedItem) {
     const destination = ['cases', 'supplier-agent'].includes(next) ? 'activity'
       : ['workflows', 'inventory', 'supplier', 'suppliers', 'policy'].includes(next) ? 'assistant' : next;
+    if (!modules.some((m) => m.id === destination && m.roles.includes(session.role))) return;
     setPage(destination);
     window.location.hash = destination;
     setMenu(false);
@@ -301,7 +305,7 @@ function Workspace({ session, onLogout }) {
     suppliers: 'Supplier comparison',
     supplier: 'Inventory & quotes',
     policy: 'Supplier policy',
-    assistant: retail ? 'Retail Agent Chat' : 'Supplier Agent Chat',
+    assistant: distributor ? 'Distributor Agent Chat' : retail ? 'Retail Agent Chat' : 'Supplier Agent Chat',
     activity: 'Request Activity',
     evaluation: 'Evaluation & metrics',
     'agent-registry': 'Agent registry',
@@ -342,10 +346,10 @@ function Workspace({ session, onLogout }) {
         <div className="topbar-right">
           <span className="environment">POC ENVIRONMENT</span>
           <span className="top-divider" />
-          <div className="user-avatar">{retail ? 'RM' : 'SP'}</div>
+          <div className="user-avatar">{distributor ? 'DI' : retail ? 'RM' : 'SP'}</div>
           <div className="user-label">
-            <strong>{retail ? 'Retail manager' : session.supplier_id}</strong>
-            <span>{retail ? 'Operations workspace' : 'Supplier workspace'}</span>
+            <strong>{distributor ? 'Distributor' : retail ? 'Retail manager' : session.supplier_id}</strong>
+            <span>{distributor ? 'Distributor workspace' : retail ? 'Operations workspace' : 'Supplier workspace'}</span>
           </div>
         </div>
       </header>
@@ -412,7 +416,7 @@ function Workspace({ session, onLogout }) {
         <div className="page-heading">
           <div>
             <div className="eyebrow">
-              {retail ? 'RETAIL MANAGER' : `SUPPLIER · ${session.supplier_id}`}
+              {distributor ? 'DISTRIBUTOR' : retail ? 'RETAIL MANAGER' : `SUPPLIER · ${session.supplier_id}`}
             </div>
             <h1>{titles[page]}</h1>
             <p>{subtitles[page]}</p>
@@ -420,11 +424,13 @@ function Workspace({ session, onLogout }) {
           {page === 'evaluation' && <button onClick={() => navigate('assistant')}>← Back to agent chat</button>}
         </div>
         <ErrorNotice error={logout.error} />
-        {page === 'overview' && <Overview {...shared} />}
-        {page === 'activity' && <RequestActivity {...shared} />}
-        {page === 'agent-registry' && <AgentRegistry session={session} />}
+        {!distributor && page === 'overview' && <Overview {...shared} />}
+        {!distributor && page === 'activity' && <RequestActivity {...shared} />}
+        {!distributor && page === 'agent-registry' && <AgentRegistry session={session} />}
         <div className="chat-page-slot" hidden={page !== 'assistant'}>
-          <AgentChat key={currentChat.id} {...shared} chatId={currentChat.id} initialChat={currentChat.snapshot} onSaveChat={saveChat} onNewChat={createChat} active={page === 'assistant'} />
+          {distributor
+            ? <DistributorChat key={currentChat.id} chatId={currentChat.id} initialChat={currentChat.snapshot} onSaveChat={saveChat} onNewChat={createChat} />
+            : <AgentChat key={currentChat.id} {...shared} chatId={currentChat.id} initialChat={currentChat.snapshot} onSaveChat={saveChat} onNewChat={createChat} active={page === 'assistant'} />}
         </div>
         {retail && <div hidden={page !== 'evaluation'}>
           <EvaluationPage session={session} active={page === 'evaluation'} navigate={navigate} />

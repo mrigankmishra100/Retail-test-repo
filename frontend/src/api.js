@@ -21,7 +21,7 @@ export async function request(path, { method = 'GET', body, key, activityOwnerId
   const controller = new AbortController();
   // Hosted agent calls can take up to 250 seconds; allow the server to return
   // its outcome instead of abandoning a longer multi-tool analysis at 90s.
-  const timeout = setTimeout(() => controller.abort(), path === '/chat' ? 270000 : 90000);
+  const timeout = setTimeout(() => controller.abort(), ['/chat', '/distributor/questions/ask'].includes(path) ? 270000 : 90000);
   try {
     const response = await fetch(`${BASE}${path}`, {
       method,
@@ -39,6 +39,12 @@ export async function request(path, { method = 'GET', body, key, activityOwnerId
       outcome = 'failed';
       if (response.status === 401) window.dispatchEvent(new Event('session-expired'));
       const error = new ApiError(
+        ((response.status === 422 || response.status === 404) && path === '/sessions' && body?.role === 'distributor'
+          ? 'Distributor chat needs the updated backend. Retail manager and Supplier are unchanged. Ask the administrator to connect the Distributor service.'
+          : null) ||
+        (response.status === 404 && path.startsWith('/distributor/')
+          ? 'Distributor chat is not connected on this backend yet. Ask the administrator to connect the Distributor service.'
+          : null) ||
         (response.status === 404 && path === '/sessions'
           ? 'The styled UI is available, but this backend does not provide the workspace session API yet. Connect the integrated backend to enter the workspace.'
           : null) || data?.error?.message ||
@@ -74,6 +80,9 @@ export async function request(path, { method = 'GET', body, key, activityOwnerId
 const query = (params) =>
   new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined)).toString();
 export const api = {
+  // Same-origin backend adapter contract. No provider/API keys are sent by the browser.
+  distributorKnowledge: () => request('/distributor/knowledge'),
+  distributorAsk: (question) => request('/distributor/questions/ask', { method: 'POST', body: { question } }),
   officialCosts: () => request('/chat/official-costs'),
   tracing: () => request('/chat/tracing'),
   centralLogs: (hours = 1) => request(`/chat/central-logs${hours === 1 ? '' : `?hours=${hours}`}`),
