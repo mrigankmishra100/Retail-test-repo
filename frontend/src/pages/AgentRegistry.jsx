@@ -71,7 +71,6 @@ function DeliveryConnection({ agent, connection, onMessage }) {
 
 export default function AgentRegistry({ session }) {
   const [form, setForm] = useState(initialForm);
-  const [connectOnRegister, setConnectOnRegister] = useState(false);
   const [registrationToken, setRegistrationToken] = useState('');
   const registrationConnection = useAction();
   const [offset, setOffset] = useState(0);
@@ -89,7 +88,7 @@ export default function AgentRegistry({ session }) {
     event.preventDefault();
     setMessage('');
     registrationConnection.clear();
-    const connect = session?.role === 'supplier' && form.agent_type === 'CUSTOM' && connectOnRegister;
+    const connect = session?.role === 'supplier' && form.agent_type === 'CUSTOM';
     const token = registrationToken;
     const result = await action.run('register-agent', () => api.registerAgent({
       ...form, name: form.name.trim(), description: form.description.trim(), endpoint_url: form.endpoint_url.trim(),
@@ -99,15 +98,14 @@ export default function AgentRegistry({ session }) {
       // connection failure leaves the new row available to retry without duplicates.
       setForm(initialForm);
       setRegistrationToken('');
-      setConnectOnRegister(false);
       setOffset(0);
-      agents.reload();
       if (connect) {
         const saved = await registrationConnection.run('connect-new-agent', () => api.connectDeliveryAgent(result.agent_id, token));
-        connection.reload();
         setMessage(saved ? `${result.name} registered. ${result.active ? 'Connected for delivery questions in this session.' : 'Connection saved; activate this agent to use it.'}`
           : `${result.name} registered, but its delivery connection was not saved. Use Connect delivery API on this entry to retry; do not register it again.`);
       } else setMessage(`${result.name} registered.`);
+      agents.reload();
+      connection.reload();
     }
   }
 
@@ -158,7 +156,7 @@ export default function AgentRegistry({ session }) {
               </label>
               <label>
                 Role / type
-                <select value={form.agent_type} onChange={(e) => { update('agent_type', e.target.value); setRegistrationToken(''); setConnectOnRegister(false); }}>
+                <select value={form.agent_type} onChange={(e) => { update('agent_type', e.target.value); setRegistrationToken(''); }}>
                   <option value="RETAIL">Retail</option>
                   <option value="SUPPLIER">Supplier</option>
                   <option value="CUSTOM">Custom</option>
@@ -181,7 +179,7 @@ export default function AgentRegistry({ session }) {
                 onChange={(e) => {
                   const value = e.target.value;
                   const valid = form.agent_type === 'CUSTOM'
-                    ? invokeUrl.test(value.trim()) || /^https:\/\/(?:[a-z0-9.-]+|\[[a-f0-9:]+\])(?::[0-9]{1,5})?\/[A-Za-z0-9/_-]+$/.test(value.trim()) : invokeUrl.test(value.trim());
+                    ? invokeUrl.test(value.trim()) || /^https:\/\/(?:[a-z0-9.-]+|\[[a-f0-9:]+\])(?::[0-9]{1,5})?\/[A-Za-z0-9/._-]+$/.test(value.trim()) : invokeUrl.test(value.trim());
                   e.target.setCustomValidity(!value || valid
                     ? '' : form.agent_type === 'CUSTOM' ? 'Enter the full public HTTPS API endpoint, including its port and path.' : 'Enter an HTTPS OCI Hosted Application URL ending in /actions/invoke.');
                   update('endpoint_url', value);
@@ -189,16 +187,12 @@ export default function AgentRegistry({ session }) {
               />
             </label>
             <p id="registry-url-help" className="registry-help">
-              {form.agent_type === 'CUSTOM' ? 'Use any display name and the full public HTTPS API endpoint, including its port. Select delivery questions below to connect a compatible distributor question/answer API during registration.' : 'HTTPS invoke URL ending in /actions/invoke.'}
+              {form.agent_type === 'CUSTOM' ? 'Use any display name and the full public HTTPS API endpoint, including its port. Supplier registration also connects this API for delivery questions. The API must support the distributor question/answer format.' : 'HTTPS invoke URL ending in /actions/invoke.'}
             </p>
             {form.agent_type === 'CUSTOM' && session?.role === 'supplier' && <div className="registry-optional">
-              <label className="checkbox"><input type="checkbox" checked={connectOnRegister}
-                onChange={(e) => { setConnectOnRegister(e.target.checked); if (!e.target.checked) setRegistrationToken(''); }} />Use for delivery questions in this session</label>
-              {connectOnRegister && <>
                 <label>Bearer token (optional)<input type="password" autoComplete="off" minLength={16} maxLength={4105}
                   value={registrationToken} onChange={(e) => setRegistrationToken(e.target.value)} /></label>
                 <p className="registry-help">Paste the token value or Bearer followed by the token. Leave blank only if the API allows unauthenticated requests. Registering also saves this session's delivery connection, replacing any previous one.</p>
-              </>}
             </div>}
             {form.agent_type === 'CUSTOM' && session?.role !== 'supplier' && <p className="registry-help">Sign in as a supplier to connect this API for delivery questions.</p>}
             <details className="registry-optional"><summary>Add a description</summary>

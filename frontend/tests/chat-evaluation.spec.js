@@ -1,5 +1,55 @@
 import { test, expect } from '@playwright/test';
 
+test('shared OpenAI option loads models without browser credentials and selects the workflow provider', async ({ page }, info) => {
+  await setup(page);
+  const profile = { id: 'external-server-openai', label: 'Fixture text model · OpenAI', model_id: 'fixture-text-model', provider: 'openai', file_search: false };
+  await page.route('**/api/chat/external-model-options', route => {
+    expect(route.request().postDataJSON()).toEqual({ provider: 'openai', use_server_key: true });
+    return route.fulfill({ json: { models: ['fixture-text-model', 'another-text-model'] } });
+  });
+  await page.route('**/api/chat/external-models', route => {
+    expect(route.request().postDataJSON()).toEqual({ provider: 'openai', use_server_key: true, model_id: 'fixture-text-model', max_tokens: null });
+    return route.fulfill({ status: 201, json: { profile } });
+  });
+  const options = await page.getByLabel('Chat model').locator('option').allTextContents();
+  expect(options[2]).toBe('OpenAI…');
+  await page.getByLabel('Chat model').selectOption('__openai__');
+  const dialog = page.getByRole('dialog', { name: 'Choose an OpenAI model' });
+  await expect(dialog.getByLabel('API key', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByLabel('Maximum output tokens')).toHaveCount(0);
+  const box = await dialog.boundingBox();
+  expect(Math.abs(box.x + box.width / 2 - page.viewportSize().width / 2)).toBeLessThan(2);
+  expect(Math.abs(box.y + box.height / 2 - page.viewportSize().height / 2)).toBeLessThan(2);
+  expect(box.height).toBeLessThan(500);
+  await expect(page.getByText('POC ENVIRONMENT', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole('combobox', { name: 'Model ID', exact: true })).toHaveValue('');
+  await dialog.getByLabel('Model ID', { exact: true }).selectOption(profile.model_id);
+  await page.screenshot({ path: info.outputPath('server-openai.png') });
+  await dialog.getByRole('button', { name: 'Use model', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByLabel('Chat model')).toHaveValue(profile.id);
+  await expect(page.getByLabel('File Search / RAG', { exact: true })).toBeDisabled();
+  await page.route('**/api/chat', route => {
+    const body = route.request().postDataJSON();
+    expect(body.model_profile).toBe(profile.id);
+    expect(body).not.toHaveProperty('api_key');
+    return route.fulfill({ json: { message: 'Shared OpenAI response', mode: 'llm_read_only' } });
+  });
+  await page.getByLabel('Message to agent').fill('Compare supplier lead times');
+  await page.getByLabel('Message to agent').press('Enter');
+  await expect(page.getByRole('log')).toContainText('Shared OpenAI response');
+});
+
+test('unconfigured shared OpenAI leaves the current selection unchanged', async ({ page }) => {
+  await setup(page);
+  await page.route('**/api/chat/external-model-options', route => route.fulfill({ status: 502, json: { error: { message: 'OpenAI is not configured on the Retail agent.' } } }));
+  await page.getByLabel('Chat model').selectOption('__openai__');
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('alert')).toContainText('OpenAI is not configured');
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByLabel('Chat model')).toHaveValue('flash');
+});
+
 test('comparison connects an external model without changing the chat workflow or storing its key', async ({ page }, info) => {
   const state = await setup(page);
   const profile = { id: 'external-compare', label: 'External OpenAI', model_id: 'gpt-fixture', provider: 'openai', file_search: false };
@@ -15,7 +65,7 @@ test('comparison connects an external model without changing the chat workflow o
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByLabel('Add comparison model').selectOption('external');
   const dialog = page.getByRole('dialog');
-  await expect(dialog).toContainText('same prompt and read-only tools');
+  await expect(dialog).toContainText('Choose a model to compare.');
   await dialog.getByLabel('Provider', { exact: true }).selectOption('openai');
   await dialog.getByLabel('API key', { exact: true }).fill('comparison-fixture-secret');
   await dialog.getByRole('button', { name: 'Load available models' }).click();
@@ -106,6 +156,48 @@ test('external model details appear only from the dropdown and its handle runs c
   expect(connectBody.api_key).toBe('fixture-external-secret');
   expect(await page.evaluate(() => JSON.stringify([localStorage, sessionStorage]))).not.toContain('fixture-external-secret');
 });
+
+test('OpenAI model picker fits mobile and restores focus when dismissed', async ({ page }, info) => {
+  await setup(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/api/chat/external-model-options', route => route.fulfill({ json: { models: ['fixture-text-model'] } }));
+  await page.getByLabel('Chat model').focus();
+  await page.getByLabel('Chat model').selectOption('__openai__');
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Model ID', { exact: true })).toBeEnabled();
+  const box = await dialog.boundingBox();
+  expect(box.x).toBeGreaterThanOrEqual(15);
+  expect(box.x + box.width).toBeLessThanOrEqual(375);
+  expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath('openai-mobile.png') });
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByLabel('Chat model')).toBeFocused();
+  await expect(page.getByLabel('Chat model')).toHaveValue('flash');
+});
+
+for (const scenario of ['missing-usage', 'missing-price', 'negative-price', 'zero-cost']) {
+  test(`cost visibility is accurate for ${scenario}`, async ({ page }, info) => {
+    await setup(page);
+    const complete = scenario !== 'missing-usage';
+    await page.route('**/api/chat/metrics', route => route.fulfill({ json: { records: [{
+      id: 'cost-fixture', kind: 'turn', metrics: {
+        run_id: 'cost-fixture', profile_id: 'flash', model_id: 'fixture-model', status: 'completed',
+        input_tokens: complete ? 0 : null, output_tokens: complete ? 0 : null, usage_complete: complete,
+        model_cost_usd: scenario === 'missing-price' ? null : scenario === 'negative-price' ? -1 : 0,
+        duration_ms: 1000, calls: [], events: [], estimated_rates: { input_usd_per_million: 0.3, output_usd_per_million: 2.5 },
+      },
+    }] } }));
+    await openEvaluation(page, 'Overview');
+    const panel = page.locator('#eval-view-overview .estimated-finops');
+    if (scenario === 'zero-cost') await expect(panel).toContainText('$0.0000');
+    else await expect(panel).toHaveCount(0);
+    if (!complete) {
+      await expect(page.locator('.session-metrics-grid article').first()).toContainText('Not reported');
+      await page.screenshot({ path: info.outputPath('metrics-without-estimates.png') });
+    }
+  });
+}
 
 test('external connection cancellation and provider changes clear its key', async ({ page }) => {
   await setup(page);
@@ -316,7 +408,7 @@ test('estimated spend sums only priced runs and exposes rate assumptions', async
   const costs = page.locator('#eval-view-overview .estimated-finops');
   await expect(costs).toContainText('$0.00112');
   await expect(costs).toContainText('1 / 2 runs priced');
-  await expect(costs).toContainText('Not estimated');
+  await expect(costs).not.toContainText('Not estimated');
   await costs.getByText('Rates & coverage', { exact: true }).click();
   await expect(costs).toContainText('Reasoning tokens are already included in output');
   await expect(costs).toContainText('input 0.3');
@@ -774,9 +866,9 @@ test('estimated cloud costs show missing coverage without calling billing', asyn
   const state = await setup(page);
   expect(state.calls.some((call) => call.path === '/chat/official-costs')).toBe(false);
   await openEvaluation(page, 'Cloud monitoring');
-  await expect(page.locator('.cloud-operations')).toContainText('Not estimated');
+  await expect(page.locator('.cloud-operations .estimated-finops')).toHaveCount(0);
   await expect(page.locator('.cloud-operations')).not.toContainText('Live agent registry');
-  await expect(page.locator('.cloud-operations-grid > article, .cloud-operations-grid > section')).toHaveCount(2);
+  await expect(page.locator('.cloud-operations-grid > article, .cloud-operations-grid > section')).toHaveCount(1);
   await expect(page.locator('.cloud-operations')).toContainText('Live records retrieved from OCI');
   await expect(page.locator('.cloud-cost')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'OCI application events' })).toBeVisible();

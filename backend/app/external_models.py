@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from threading import Lock
 from typing import Literal
 from uuid import uuid4
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 from app.chat_models import ChatModelProfile
 from app.services.cases import CaseConflict
 
@@ -15,20 +15,44 @@ class ExternalModelInput(BaseModel):
     model_config = ConfigDict(extra='forbid', hide_input_in_errors=True)
     provider: Literal['gemini', 'openai', 'anthropic']
     model_id: str = Field(min_length=1, max_length=150, pattern=r'^[A-Za-z0-9][A-Za-z0-9._:-]*$')
-    api_key: SecretStr = Field(repr=False)
-    max_tokens: int = Field(default=4096, ge=256, le=16000)
+    api_key: SecretStr | None = Field(default=None, repr=False)
+    use_server_key: bool = False
+    max_tokens: int | None = Field(default=4096, ge=256, le=16000)
 
     @field_validator('api_key')
     @classmethod
     def key(cls, value):
+        if value is None:
+            return value
         raw = value.get_secret_value()
         if not 12 <= len(raw) <= 512 or any(c.isspace() or ord(c) < 33 or ord(c) > 126 for c in raw):
             raise ValueError('Enter a valid provider API key')
         return value
 
+    @model_validator(mode='after')
+    def credentials(self):
+        if self.max_tokens is None and self.provider != 'openai':
+            raise ValueError('This provider requires an output token limit')
+        if self.use_server_key:
+            if self.provider != 'openai' or self.api_key is not None:
+                raise ValueError('Server credentials are available only for configured OpenAI')
+        elif self.api_key is None:
+            raise ValueError('Enter a provider API key')
+        return self
+
+    def resolved(self, settings):
+        if not self.use_server_key:
+            return self
+        key = getattr(settings, 'openai_api_key', None)
+        if not key or not key.get_secret_value():
+            from app.enterprise_ai.external import ExternalModelUnavailable
+            raise ExternalModelUnavailable('openai_not_configured')
+        return ExternalModelInput(provider='openai', model_id=self.model_id,
+            api_key=key, max_tokens=self.max_tokens)
+
     def wire(self):
         # Only for the existing authenticated HTTPS backend-to-agent transport.
-        return {**self.model_dump(mode='json'), 'api_key': self.api_key.get_secret_value()}
+        return {**self.model_dump(mode='json'), 'api_key': self.api_key.get_secret_value() if self.api_key else None}
 
 
 class ExternalModelConnection(BaseModel):

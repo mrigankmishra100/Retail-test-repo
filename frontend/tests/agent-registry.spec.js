@@ -68,6 +68,7 @@ test('supplier registers REST delivery agent and connects a session token', asyn
   await expect(page.getByRole('option', { name: 'Delivery agent (REST)' })).toHaveCount(0);
   await page.getByLabel('Custom agent endpoint').fill('https://150.230.130.251:8081/aws-app/api/v1/answers');
   await page.getByRole('combobox', { name: 'Status', exact: true }).selectOption('true');
+  await page.getByLabel('Bearer token (optional)', { exact: true }).fill('fixture-delivery-token-123456');
   await page.getByRole('button', { name: 'Register agent', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Delivery agent registered.' })).toBeVisible();
   await page.getByText('Connect delivery API', { exact: true }).click();
@@ -92,7 +93,7 @@ test('supplier registers REST delivery agent and connects a session token', asyn
   await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Delivery connection removed' })).toBeVisible();
   await expect(page.getByRole('status').filter({ hasText: /^Not connected for this session$/ })).toBeVisible();
-  expect(requests.filter(r => r.path.endsWith('/delivery-connection') && r.method !== 'GET').map(r => r.method)).toEqual(['POST','DELETE']);
+  expect(requests.filter(r => r.path.endsWith('/delivery-connection') && r.method !== 'GET').map(r => r.method)).toEqual(['POST','POST','DELETE']);
 });
 
 for (const token of ['fixture-delivery-token-123456', '']) {
@@ -101,7 +102,7 @@ for (const token of ['fixture-delivery-token-123456', '']) {
     await page.getByLabel('Name', { exact: true }).fill('Delivery agent');
     await page.getByLabel('Custom agent endpoint').fill('https://delivery.example.com/api/v1/answers');
     await page.getByRole('combobox', { name: 'Status', exact: true }).selectOption('true');
-    await page.getByLabel('Use for delivery questions in this session').check();
+    await expect(page.getByLabel('Use for delivery questions in this session')).toHaveCount(0);
     await page.getByLabel('Bearer token (optional)', { exact: true }).fill(token);
     await page.screenshot({ path: testInfo.outputPath('registration-connection.png') });
     await page.getByRole('button', { name: 'Register agent', exact: true }).click();
@@ -120,7 +121,7 @@ test('registration connection failure preserves the entry and explains how to re
   const { agents, requests } = await workspace(page, 'supplier', { connectionFailure: true });
   await page.getByLabel('Name', { exact: true }).fill('Delivery agent');
   await page.getByLabel('Custom agent endpoint').fill('https://delivery.example.com/api/v1/answers');
-  await page.getByLabel('Use for delivery questions in this session').check();
+  await expect(page.getByLabel('Use for delivery questions in this session')).toHaveCount(0);
   await page.getByLabel('Bearer token (optional)', { exact: true }).fill('fixture-delivery-token-123456');
   await page.getByRole('button', { name: 'Register agent', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'do not register it again' })).toBeVisible();
@@ -132,7 +133,7 @@ test('registration connection failure preserves the entry and explains how to re
 
 test('changing agent type clears registration credentials and does not connect a core role', async ({ page }) => {
   const { requests } = await workspace(page, 'supplier');
-  await page.getByLabel('Use for delivery questions in this session').check();
+  await expect(page.getByLabel('Use for delivery questions in this session')).toHaveCount(0);
   await page.getByLabel('Bearer token (optional)', { exact: true }).fill('fixture-delivery-token-123456');
   await page.getByLabel('Role / type').selectOption('RETAIL');
   await expect(page.getByLabel('Bearer token (optional)', { exact: true })).toHaveCount(0);
@@ -190,7 +191,7 @@ test('delete conflict remains in confirmation with useful guidance', async ({ pa
 
 for (const role of ['retail-manager', 'supplier']) {
   test(`${role} can register, activate and deactivate an agent`, async ({ page }, testInfo) => {
-    const { agents, requests } = await workspace(page, role);
+    const { agents, requests } = await workspace(page, role, { expectedToken: '' });
     await expect(page.getByText('No registered agents')).toBeVisible();
     await page.getByText('Registration and routing', { exact: true }).click();
     await expect(page.locator('.registry-guidance')).toContainText('deactivating the last active Retail or Supplier entry blocks');
@@ -220,7 +221,7 @@ for (const role of ['retail-manager', 'supplier']) {
     await expect(page.getByRole('cell', { name: 'Inactive', exact: true })).toBeVisible();
     expect(agents[0].active).toBe(false);
     expect(requests.filter((request) => request.method === 'POST').map((request) => request.path)).toEqual([
-      '/registry/agents', '/registry/agents/22222222-2222-4222-8222-222222222222/activate',
+      '/registry/agents', ...(role === 'supplier' ? ['/registry/agents/22222222-2222-4222-8222-222222222222/delivery-connection'] : []), '/registry/agents/22222222-2222-4222-8222-222222222222/activate',
       '/registry/agents/22222222-2222-4222-8222-222222222222/deactivate',
     ]);
     // The shell still exposes the existing role-specific workspace.

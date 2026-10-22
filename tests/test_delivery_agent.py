@@ -311,7 +311,7 @@ def test_supplier_chat_displays_exact_delivery_answer_without_model_rewrite(rest
     assert result['message'] == answer and result['mode'] == 'delivery_answer'
     from app.contracts import ChatResponse
     ChatResponse.model_validate(result)
-    assert c.responses.create_response_sync.call_count == 2  # Scope + routing, no answer rewrite.
+    c.responses.create_response_sync.assert_not_called()  # Fresh connection controls routing; no rewrite.
     assert TOKEN not in repr(c.responses.create_response_sync.call_args_list)
     assert answer not in repr(c.responses.create_response_sync.call_args_list)
     saved = c.cache.get_state('supplier_chat:' + result['conversation_id'])
@@ -348,7 +348,8 @@ def test_delivery_questions_do_not_advertise_unavailable_capability(rest_stub, s
         from time import monotonic
         c.cache._clock = monotonic
     result = SupplierConversationService(c).respond(ChatRequest(message='can you suggest delivery options'), session=who)
-    assert result['mode'] == 'deterministic_read_only' and result['used_tools'] == []
+    assert result['mode'] == 'scope_guidance' and result['used_tools'] == []
+    assert not any(word in result['message'].lower() for word in ['register', 'connect', 'api', 'token'])
     assert not any(name in result['message'] for name in ['BlueDart', 'Delhivery', 'Ekart', 'DTDC'])
     c.guardrails.client.apply_guardrails.assert_called_once()
     c.responses.create_response_sync.assert_not_called()
@@ -361,7 +362,7 @@ def test_unconnected_supplier_prompt_has_no_delivery_tool_or_carrier_catalog():
     call = c.responses.create_response_sync.call_args_list[-1]
     assert 'ask_delivery_agent' not in {t['name'] for t in call.kwargs['tools']}
     assert 'list_supplier_requests' in {t['name'] for t in call.kwargs['tools']}
-    assert 'Distributor lookup is NOT available' in repr(call)
+    assert 'Do not volunteer API, token, registration or setup instructions' in repr(call)
     assert not any(name in repr(call) for name in ['BlueDart', 'Delhivery', 'Ekart', 'DTDC'])
 
 
@@ -379,7 +380,9 @@ def test_delivery_deactivated_during_model_call_cannot_produce_fabricated_answer
             row['active'] = 0
         return result
     c.responses.create_response_sync.side_effect = answer
-    result = SupplierConversationService(c).respond(ChatRequest(message='BlueDart timelines?'), session=who)
+    # A contextual follow-up can still be routed by the model; revalidation at
+    # the tool boundary must reject a connection deactivated during inference.
+    result = SupplierConversationService(c).respond(ChatRequest(message='What are their timelines?'), session=who)
     assert result['llm_status'] == 'unavailable'
     assert 'did not return verified information' in result['message']
     assert 'tomorrow' not in result['message']
@@ -539,7 +542,7 @@ def test_signed_mcp_can_use_connection_saved_by_gateway(rest_stub, chat):
     assert result['structuredContent']['message'] == 'BlueDart Express Air: 1-2 business days [source-1].'
     if chat:
         assert result['structuredContent']['mode'] == 'delivery_answer'
-        assert c.responses.create_response_sync.call_count == 2
+        c.responses.create_response_sync.assert_not_called()
     else:
         assert result['structuredContent']['status'] == 'completed'
         assert result['structuredContent']['demo_data'] is True

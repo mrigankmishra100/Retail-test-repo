@@ -1,13 +1,14 @@
 export const money = (value) => typeof value === 'number' && Number.isFinite(value)
-  ? `$${value.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 6 })}` : 'Not estimated';
+  ? `$${value.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 6 })}` : '—';
 
 // Only use the model-only field; legacy totals may include retrieval charges.
-export const modelCost = (metrics) => typeof metrics?.model_cost_usd === 'number' && Number.isFinite(metrics.model_cost_usd)
+export const modelCost = (metrics) => metrics?.usage_complete === true && typeof metrics.model_cost_usd === 'number' && Number.isFinite(metrics.model_cost_usd) && metrics.model_cost_usd >= 0
   ? metrics.model_cost_usd : null;
 
 export default function EstimatedFinOps({ records = [], models = [] }) {
   const runs = records.map((r) => r.metrics).filter(Boolean);
   const priced = runs.filter((r) => modelCost(r) !== null);
+  if (!priced.length) return null;
   const total = priced.reduce((sum, r) => sum + modelCost(r), 0);
   const groups = Object.values(runs.reduce((all, run) => {
     const key = run.model_id || run.profile_id;
@@ -16,7 +17,7 @@ export default function EstimatedFinOps({ records = [], models = [] }) {
     if (modelCost(run) !== null) { group.priced++; group.cost += modelCost(run); }
     if (run.estimated_rates && !group.rates.some((r) => JSON.stringify(r) === JSON.stringify(run.estimated_rates))) group.rates.push(run.estimated_rates);
     return all;
-  }, {})).sort((a, b) => b.cost - a.cost);
+  }, {})).filter((group) => group.priced > 0).sort((a, b) => b.cost - a.cost);
   return <section className="estimated-finops" aria-label="Estimated model costs">
     <header><div><span className="eyebrow">MODEL USAGE</span><h3>Estimated spend</h3></div><span className="estimate-label">Estimate · USD</span></header>
     <div className="finops-totals"><div><strong>{priced.length ? money(total) : 'Not estimated'}</strong><small>{priced.length} / {runs.length} runs priced</small></div>

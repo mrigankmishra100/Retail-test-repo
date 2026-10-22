@@ -44,6 +44,7 @@ class ChatCatalog(BaseModel):
     route: str
     tool_execution: str
     nl2sql_enabled: bool
+    configured_providers: list[str] = Field(default_factory=list)
 
 
 class ChatContainerView:
@@ -73,6 +74,7 @@ class ChatExperienceService:
         configured = available_profiles(self.container, session)
         return {'models': [{**p.model_dump(), 'file_search': p.file_search and bool(settings.enterprise_ai_vector_store_ids)}
                            for p in configured.values()],
+            'configured_providers': ['openai'] if getattr(settings, 'openai_api_key', None) else [],
             'enabled': settings.enterprise_ai_responses_enabled or any(p.provider != 'oci' for p in configured.values()),
             'regional_evaluation_enabled': True,
             'default_profile': next(iter(configured), None), 'route': 'local_retail_agent',
@@ -96,6 +98,7 @@ class ChatExperienceService:
         if self.remote:
             return self.container.remote_retail_agent.invoke('connect_model', {'config': config.wire()}, session)
         from app.enterprise_ai.external import ExternalModelClient
+        config = config.resolved(self.container.settings)
         ExternalModelClient(config).validate_connection()
         return self.container.external_models.register(config, session).model_dump(mode='json')
 
@@ -104,6 +107,7 @@ class ChatExperienceService:
         if self.remote:
             return self.container.remote_retail_agent.invoke('discover_models', {'config': config.wire()}, session)
         from app.enterprise_ai.external import ExternalModelClient
+        config = config.resolved(self.container.settings)
         return {'models': ExternalModelClient(config).available_models()}
 
     def scoped_container(self, profile, rag, trace, session, regional=None):

@@ -65,12 +65,13 @@ AWS delivery REST registration and a supplier-only `ask_delivery_agent` tool are
 included in this source release. See the
 [delivery REST contract and setup](docs/delivery-agent-rest-contract.md) for the AWS
 owner and deployment steps. Choose CUSTOM and any name (for example Delivery agent),
-select **Use for delivery questions in this session**, and optionally enter its bearer
-token before clicking **Register agent**. This saves the connection in the same UI
+optionally enter its bearer token, and click **Register agent** in the supplier workspace.
+This automatically saves the session connection in the same UI
 action. Blank means no Authorization header; the current distributor endpoint still
 requires its token. Existing entries can be connected or reconnected from their row.
 That connection selects
-the destination; names and registration alone do not route chat. Custom registration
+the destination; names do not determine routing. Supplier Custom registration now
+selects that agent for delivery questions, replacing the prior session selection. Custom registration
 needs no Delivery schema migration. Legacy DELIVERY entries remain supported.
 Registry changes, connections and REST calls have dedicated Langfuse observations
 when existing runtime tracing is configured. Hosted delivery connections use the
@@ -83,6 +84,12 @@ references. Supplier chat displays the API answer directly without a model rewri
 or app-added demo disclaimer; source/demo metadata remains in tool results and tracing.
 Live bearer authentication and response
 validation passed locally; hosted OCI end-to-end verification remains pending.
+
+The retail model menu also includes **OpenAI…**, using a server-configured key and
+the provider's live model catalog. See [local testing and deployment notes](docs/cloudworld-local-changes.md)
+for private key setup, supported models and compatibility with Deployment Studio.
+For the AI World event, share the [deployment handoff](docs/ai-world-deployment-handoff.md)
+with the dashboard owner; it covers OpenAI credentials and both deployment stages.
 
 ## Initial source-release verification (historical)
 

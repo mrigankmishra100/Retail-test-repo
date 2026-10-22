@@ -1505,6 +1505,24 @@ td strong {
 .drawer-body {
   padding: 25px;
 }
+.drawer.centered-dialog {
+  inset: 0;
+  margin: auto;
+  width: min(520px, calc(100% - 32px));
+  height: fit-content;
+  max-height: calc(100dvh - 32px);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 20px 80px #312d2a30;
+  overflow-y: auto;
+}
+.centered-dialog .drawer-heading { padding: 18px 22px; background: #fff; }
+.centered-dialog .drawer-body { padding: 22px; }
+.centered-dialog .external-model-form { gap: 18px; }
+.centered-dialog .external-model-form > p { margin: 0; color: var(--muted); }
+.model-picker-help { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.model-picker-help small { color: var(--muted); }
+.model-picker-help button { flex-shrink: 0; }
 .detail-title {
   display: flex;
   gap: 10px;

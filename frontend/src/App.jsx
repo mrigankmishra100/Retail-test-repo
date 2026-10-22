@@ -340,7 +340,6 @@ function Workspace({ session, onLogout }) {
         </button>
         <Brand />
         <div className="topbar-right">
-          <span className="environment">POC ENVIRONMENT</span>
           <span className="top-divider" />
           <div className="user-avatar">{retail ? 'RM' : 'SP'}</div>
           <div className="user-label">

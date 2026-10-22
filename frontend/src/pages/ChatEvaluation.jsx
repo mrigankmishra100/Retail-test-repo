@@ -27,7 +27,7 @@ export function RunMetrics({ metrics, compact = false }) {
     <div className="metric-strip">
       <span><small>Input / output tokens</small><b>{count(metrics.input_tokens)} / {count(metrics.output_tokens)}</b></span>
       <span><small>End-to-end latency</small><b>{duration(metrics.duration_ms)}</b></span>
-      <span><small>Estimated model cost</small><b>{money(modelCost(metrics))}</b></span>
+      {modelCost(metrics) !== null && <span><small>Estimated model cost</small><b>{money(modelCost(metrics))}</b></span>}
       <span><small>Model calls</small><b>{count(metrics.call_count)}</b></span>
     </div>
     <ExecutionFlow key={metrics.run_id} metrics={metrics} />
@@ -43,7 +43,7 @@ export function RunMetrics({ metrics, compact = false }) {
       {metrics.citations?.length > 0 && <div><b>Retrieved sources</b><ul>{metrics.citations.map((c, i) =>
         <li key={i}>{c.filename || c.file_id || 'Policy document'}</li>)}</ul></div>}
       <p className="muted">Cached tokens: {count(metrics.cached_tokens)} · Reasoning tokens: {count(metrics.reasoning_tokens)} (included in output)</p>
-      <p className="muted">{metrics.model_cost_scope || "Estimates use configured token rates and exclude other services; not an OCI bill."}</p>
+      {modelCost(metrics) !== null && <p className="muted">{metrics.model_cost_scope || "Estimates use configured token rates and exclude other services; not an OCI bill."}</p>}
       <small>Run {metrics.run_id}</small>
     </details>
   </div>;
@@ -91,12 +91,14 @@ export default function ChatEvaluation({ catalog, active, refreshKey, sessionId,
     const latencies = runs.map((r) => r.duration_ms).filter(numeric).sort((a, b) => a - b);
     const percentile = (p) => latencies.length ? latencies[Math.max(0, Math.ceil(p * latencies.length) - 1)] : null;
     return { runs: runs.length, toolCalls: runs.reduce((sum, run) => sum + (run.events || []).filter((event) => ['function_tool', 'built_in_tool'].includes(event.stage)).length, 0),
-      tokens: runs.reduce((s, r) => s + (r.input_tokens || 0) + (r.output_tokens || 0), 0),
+      tokens: runs.some((r) => numeric(r.input_tokens) || numeric(r.output_tokens))
+        ? runs.reduce((s, r) => s + (numeric(r.input_tokens) ? r.input_tokens : 0) + (numeric(r.output_tokens) ? r.output_tokens : 0), 0) : null,
       missingUsage: runs.filter((r) => !r.usage_complete).length,
       failed: runs.filter(needsAttention).length,
       p50: percentile(0.5), p95: percentile(0.95) };
   }, [history.data]);
   const busy = starting || (jobId && (!job || ['queued', 'running'].includes(job.status)));
+  const comparisonHasCosts = job?.results?.some((result) => modelCost(result.metrics) !== null);
   const canRag = selected.length > 0 && selected.every((id) => models.find((m) => m.id === id)?.file_search);
   async function start(event) {
     event.preventDefault(); setError(null); setStarting(true);
@@ -175,10 +177,10 @@ export default function ChatEvaluation({ catalog, active, refreshKey, sessionId,
       }} />}
       <ErrorNotice error={error} retry={() => { setError(null); setPollRevision((n) => n + 1); history.reload(); }} />
       {job?.message && <details className="evaluation-run-context"><summary>Run details{job.regional_model && ` · Regional API: ${job.regional_model.api_mode === 'native_chat' ? 'Native OCI Chat' : 'Responses'}`}</summary><p>{job.message}</p><small>File Search {job.use_file_search ? 'enabled' : 'disabled'}</small></details>}
-      {job?.results?.length > 0 && <div className="comparison-scorecard"><h3>Results</h3><div className="events-table"><table><thead><tr><th>Model</th><th>Outcome</th><th>Latency</th><th>Input / output</th><th>Tool calls</th><th>Est. model cost</th><th>Your rating</th></tr></thead><tbody>{job.results.map((result, index) => {
+      {job?.results?.length > 0 && <div className="comparison-scorecard"><h3>Results</h3><div className="events-table"><table><thead><tr><th>Model</th><th>Outcome</th><th>Latency</th><th>Input / output</th><th>Tool calls</th>{comparisonHasCosts && <th>Est. model cost</th>}<th>Your rating</th></tr></thead><tbody>{job.results.map((result, index) => {
         const metrics = byId[result.metrics?.run_id]?.metrics || result.metrics;
         const profile = metrics?.profile_id || result.profile_id || job.model_profiles?.[index];
-        return <tr key={profile || index}><th scope="row">{profile === regionalId ? job.regional_model?.label || regional.label : models.find((model) => model.id === profile)?.label || profile}</th><td>{outcome(metrics)?.replaceAll('_', ' ') || result.mode || 'Not reported'}</td><td>{duration(metrics?.duration_ms)}</td><td>{count(metrics?.input_tokens)} / {count(metrics?.output_tokens)}</td><td>{metrics ? (metrics.events || []).filter((event) => ['function_tool', 'built_in_tool'].includes(event.stage)).length : 'Not reported'}</td><td>{money(modelCost(metrics))}</td><td>{metrics?.quality?.human_rating ? `${metrics.quality.human_rating} / 5` : 'Not rated'}</td></tr>;
+        return <tr key={profile || index}><th scope="row">{profile === regionalId ? job.regional_model?.label || regional.label : models.find((model) => model.id === profile)?.label || profile}</th><td>{outcome(metrics)?.replaceAll('_', ' ') || result.mode || 'Not reported'}</td><td>{duration(metrics?.duration_ms)}</td><td>{count(metrics?.input_tokens)} / {count(metrics?.output_tokens)}</td><td>{metrics ? (metrics.events || []).filter((event) => ['function_tool', 'built_in_tool'].includes(event.stage)).length : 'Not reported'}</td>{comparisonHasCosts && <td>{money(modelCost(metrics))}</td>}<td>{metrics?.quality?.human_rating ? `${metrics.quality.human_rating} / 5` : 'Not rated'}</td></tr>;
       })}</tbody></table></div></div>}
       <div className="comparison-results">{job?.results?.map((result, i) => {
         const m = byId[result.metrics?.run_id]?.metrics || result.metrics;
