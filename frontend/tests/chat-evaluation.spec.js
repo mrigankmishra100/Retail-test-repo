@@ -40,14 +40,87 @@ test('shared OpenAI option loads models without browser credentials and selects 
   await expect(page.getByRole('log')).toContainText('Shared OpenAI response');
 });
 
-test('unconfigured shared OpenAI leaves the current selection unchanged', async ({ page }) => {
+test('unconfigured shared OpenAI accepts a session key for discovery and workflow without persisting it', async ({ page }, info) => {
   await setup(page);
-  await page.route('**/api/chat/external-model-options', route => route.fulfill({ status: 502, json: { error: { message: 'OpenAI is not configured on the Retail agent.' } } }));
+  const key = 'session-openai-fixture-secret';
+  const profile = { id: 'external-session-openai', label: 'Session OpenAI', model_id: 'fixture-text-model', provider: 'openai', file_search: false };
+  await page.route('**/api/chat/external-model-options', route => {
+    const body = route.request().postDataJSON();
+    if (body.use_server_key) return route.fulfill({ status: 503, json: { error: { code: 'openai_not_configured', message: 'OpenAI is not configured on the Retail agent.' } } });
+    expect(body).toEqual({ provider: 'openai', api_key: key });
+    return route.fulfill({ json: { models: [profile.model_id] } });
+  });
+  await page.route('**/api/chat/external-models', route => {
+    expect(route.request().postDataJSON()).toEqual({ provider: 'openai', api_key: key, model_id: profile.model_id, max_tokens: null });
+    return route.fulfill({ status: 201, json: { profile } });
+  });
   await page.getByLabel('Chat model').selectOption('__openai__');
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('alert')).toContainText('OpenAI is not configured');
+  await expect(dialog).toContainText('Enter your API key to use OpenAI for this session.');
+  await expect(dialog.getByRole('alert')).toHaveCount(0);
+  await expect(dialog.getByLabel('Provider', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Load available models' })).toBeDisabled();
+  await expect(dialog.getByLabel('API key', { exact: true })).toHaveAttribute('type', 'password');
+  await dialog.getByLabel('API key', { exact: true }).fill(key);
+  await dialog.getByRole('button', { name: 'Load available models' }).click();
+  await dialog.getByLabel('Model ID', { exact: true }).selectOption(profile.model_id);
+  // A changed credential must not retain the preceding key's catalog or selection.
+  await dialog.getByLabel('API key', { exact: true }).fill(key + '-changed');
+  await expect(dialog.getByLabel('Model ID', { exact: true })).toHaveValue('');
+  await expect(dialog.getByLabel('Model ID').locator('option')).toHaveCount(1);
+  await dialog.getByLabel('API key', { exact: true }).fill(key);
+  await dialog.getByRole('button', { name: 'Load available models' }).click();
+  await dialog.getByLabel('Model ID', { exact: true }).selectOption(profile.model_id);
+  await page.screenshot({ path: info.outputPath('openai-session-key.png') });
+  await dialog.getByRole('button', { name: 'Use model', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByLabel('Chat model')).toHaveValue(profile.id);
+  expect(await page.evaluate(() => JSON.stringify([localStorage, sessionStorage]))).not.toContain(key);
+  await page.route('**/api/chat', route => {
+    expect(route.request().postDataJSON().model_profile).toBe(profile.id);
+    expect(route.request().postData()).not.toContain(key);
+    return route.fulfill({ json: { message: 'Session OpenAI response', mode: 'llm_read_only' } });
+  });
+  await page.getByLabel('Message to agent').fill('Compare supplier lead times');
+  await page.getByLabel('Message to agent').press('Enter');
+  await expect(page.getByRole('log')).toContainText('Session OpenAI response');
+});
+
+test('OpenAI fallback cancellation clears the key and preserves the current model on mobile', async ({ page }, info) => {
+  await setup(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/api/chat/external-model-options', route => route.fulfill({ status: 503, json: { error: { code: 'openai_not_configured' } } }));
+  await page.getByLabel('Chat model').selectOption('__openai__');
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('API key', { exact: true }).fill('cancelled-fixture-secret');
+  await page.screenshot({ path: info.outputPath('openai-fallback-mobile.png') });
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(page.getByLabel('Chat model')).toHaveValue('flash');
+  await page.getByLabel('Chat model').selectOption('__openai__');
+  await expect(dialog.getByLabel('API key', { exact: true })).toHaveValue('');
+  expect(await page.evaluate(() => JSON.stringify([localStorage, sessionStorage]))).not.toContain('cancelled-fixture-secret');
+});
+
+test('other shared OpenAI failures remain visible without requesting a session key', async ({ page }) => {
+  await setup(page);
+  await page.route('**/api/chat/external-model-options', route => route.fulfill({ status: 503, json: { error: { code: 'external_rate_limited', message: 'Provider rate limit reached.' } } }));
+  await page.getByLabel('Chat model').selectOption('__openai__');
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('alert')).toContainText('Provider rate limit reached.');
+  await expect(dialog.getByLabel('API key', { exact: true })).toHaveCount(0);
+});
+
+test('OpenAI falls back if the shared key disappears after catalog discovery', async ({ page }) => {
+  await setup(page);
+  await page.route('**/api/chat/external-model-options', route => route.fulfill({ json: { models: ['fixture-text-model'] } }));
+  await page.route('**/api/chat/external-models', route => route.fulfill({ status: 503, json: { error: { code: 'openai_not_configured' } } }));
+  await page.getByLabel('Chat model').selectOption('__openai__');
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Model ID', { exact: true }).selectOption('fixture-text-model');
+  await dialog.getByRole('button', { name: 'Use model', exact: true }).click();
+  await expect(dialog.getByLabel('API key', { exact: true })).toHaveValue('');
+  await expect(dialog.getByLabel('Model ID', { exact: true })).toHaveValue('');
+  await expect(dialog.getByRole('alert')).toHaveCount(0);
 });
 
 test('comparison connects an external model without changing the chat workflow or storing its key', async ({ page }, info) => {

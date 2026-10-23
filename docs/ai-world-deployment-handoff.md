@@ -1,6 +1,6 @@
 # AI World Retail demo: deployment handoff
 
-First-stage source: `ai-world-retail-demo` at `7a9d3e9` in `mrigankmishra100/Retail-test-repo`.
+First-stage source: `ai-world-retail-demo` at `4f0eb0e` in `mrigankmishra100/Retail-test-repo`.
 Second-stage source: `retail-distributor-merged`, integrating that Retail release
 with `feature/retail-distributor-integration` at `a0119e2`.
 
@@ -16,6 +16,15 @@ namespaced tables. Those tables and Distributor knowledge still require the
 operator preparation documented in DEPLOYMENT.md and distributor-integration.md.
 
 ## OpenAI configuration for the dashboard owner
+
+**No dashboard change is needed for session-key entry.** When no shared key is
+configured, the OpenAI picker asks the user for an API key, loads its models, and
+uses the existing authenticated backend-to-Retail-agent connection. The key is
+held in the Retail agent's session model store, not browser storage or Git. Users
+must reconnect after session expiry or a server restart. The current branches
+already support this backend contract; deploy the updated frontend for the picker.
+
+The following setup is optional, for a shared key that users need not enter:
 
 Keep `OPENAI_API_KEY` in private VM configuration, following the dashboard's existing
 handling of deployment secrets. Include it only in the generated **retail-agent**
@@ -58,15 +67,16 @@ the dashboard owner to wire the additional setting into its provisioning code.
 Based on Deployment_Automation's `feature/retail-distributor-side-by-side` branch,
 reviewed at commit `65347b23a5d55e1c8d979532ba2421fdcc925f03`:
 
-1. Deploy all five services from `ai-world-retail-demo` at `7a9d3e9`. Configure the OpenAI key on
-   the Retail agent in this first deployment. Use the latest source commit so the
+1. Deploy all five services from `ai-world-retail-demo` at `4f0eb0e` or a compatible
+   later release. Optionally configure a shared OpenAI key on the Retail agent,
+   or use session-key entry. Use the latest source commit so the
    Retail agent also includes the comparison guardrail fix.
 2. Use `retail-distributor-merged` for the second stage. It already includes the
    Retail release and preserves Distributor functionality, including its prepared
    knowledge and Oracle JSON embedding support. Supply the Distributor-specific
    backend configuration and preparation steps from `distributor-integration.md`.
 3. The second stage builds only a new backend and frontend. It reuses the first
-   deployment's Retail agent, Supplier agent and MCP server, so the OpenAI key
+   deployment's Retail agent, Supplier agent and MCP server, so any shared OpenAI key
    stays configured on the existing Retail agent. It does not need to be copied
    into the new frontend or gateway backend.
 

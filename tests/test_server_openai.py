@@ -70,6 +70,39 @@ def test_absent_server_key_has_actionable_safe_error(container):
     assert error.value.public_code == 'openai_not_configured'
 
 
+def test_missing_shared_key_api_contract_allows_session_key_fallback(container):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.chat_api import router
+    from app.http_contract import install_http_contract
+    from app.session_api import retail_session
+
+    container.settings.openai_api_key = None
+    session = actor()
+    app = FastAPI()
+    app.include_router(router)
+    install_http_contract(app)
+    app.dependency_overrides[retail_session] = lambda: session
+    with patch('app.chat_api.get_container', return_value=container), TestClient(app) as client:
+        missing = client.post('/chat/external-model-options', json={'provider': 'openai', 'use_server_key': True})
+        assert missing.status_code == 503
+        assert missing.json()['error']['code'] == 'openai_not_configured'
+        with patch.object(ExternalModelClient, 'available_models', return_value=['fixture-text-model']):
+            catalog = client.post('/chat/external-model-options', json={'provider': 'openai', 'api_key': KEY})
+        assert catalog.status_code == 200
+        assert catalog.json() == {'models': ['fixture-text-model']}
+        assert not container.external_models.connections
+        with patch.object(ExternalModelClient, 'validate_connection'):
+            connected = client.post('/chat/external-models', json={
+                'provider': 'openai', 'api_key': KEY, 'model_id': 'fixture-text-model', 'max_tokens': None})
+        assert connected.status_code == 201
+        profile = connected.json()['profile']
+        assert profile['provider'] == 'openai'
+        assert KEY not in missing.text + catalog.text + connected.text
+        assert container.settings.openai_api_key is None
+        assert profile['id'] not in [row.id for row in container.external_models.profiles(actor())]
+
+
 @pytest.mark.parametrize('values', [
     {'provider':'gemini', 'use_server_key':True},
     {'provider':'openai', 'use_server_key':True, 'api_key':KEY},
