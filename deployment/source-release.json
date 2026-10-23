@@ -2,7 +2,8 @@
   "recorded_on": "2026-10-23",
   "release_kind": "source_only",
   "source_repository": "https://github.com/mrigankmishra100/Retail-test-repo",
-  "destination_branch": "ai-world-retail-demo",
+  "destination_branch": "R-I-Cloudworld",
+  "incorporated_source": {"branch": "ai-world-retail-demo", "commit": "b47b349bda8e85eb57b49f9675d10979d33cc84a"},
   "base_commit": "32b5125b7188ef457a68f00c7938e2f7f0fa7b66",
   "source_build_manifest": "deployment/source-build.json",
   "dashboard_review": {
@@ -32,7 +33,7 @@
   "deployment_requirements": [
     "Fresh source inspection pinned to this release commit",
     "Build all five services together for first-stage event deployment",
-    "Merge this source into the second-stage Distributor branch; reuse updated first-stage agents",
+    "Build second-stage backend/frontend from feature/retail-distributor-integration; reuse updated first-stage agents",
     "Optional OPENAI_API_KEY in private retail-agent runtime configuration only",
     "Existing delivery connection storage and grants remain required; no additional migrations in this update",
     "Single instance per service with current comparison queue"

@@ -1,6 +1,6 @@
 # Retail Inventory Agent — AI World demo
 
-Source branch: [`ai-world-retail-demo`](https://github.com/mrigankmishra100/Retail-test-repo/tree/ai-world-retail-demo).
+Source branch: [`R-I-Cloudworld`](https://github.com/mrigankmishra100/Retail-test-repo/tree/R-I-Cloudworld).
 
 Retail and Supplier workspaces for inventory analysis, supplier comparisons and
 replenishment with explicit approval controls. The optional delivery integration
@@ -12,7 +12,7 @@ can select OCI models or OpenAI using a shared server key or their own session k
 Use this source URL in Deployment Studio and select **all five services**:
 
 ```text
-https://github.com/mrigankmishra100/Retail-test-repo/tree/ai-world-retail-demo
+https://github.com/mrigankmishra100/Retail-test-repo/tree/R-I-Cloudworld
 ```
 
 The existing `deployment/source-build.json` builds Linux/amd64 images for

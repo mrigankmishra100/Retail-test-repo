@@ -1,6 +1,6 @@
 # AI World Retail demo: deployment handoff
 
-Source branch: `ai-world-retail-demo` in `mrigankmishra100/Retail-test-repo`.
+Source branch: `R-I-Cloudworld` in `mrigankmishra100/Retail-test-repo`.
 
 This release includes supplier delivery routing fixes, automatic session selection
 when a supplier registers a Custom agent, optional bearer-token entry, shared
@@ -67,10 +67,10 @@ reviewed at commit `65347b23a5d55e1c8d979532ba2421fdcc925f03`:
 1. Deploy all five services from this Retail branch. Optionally configure a shared
    OpenAI key on the Retail agent, or use session-key entry. Use the latest source commit so the
    Retail agent also includes the comparison guardrail fix.
-2. Before building the merged Retail + Distributor branch for the second stage,
-   merge this release into that source branch and resolve conflicts while keeping
-   its Distributor functionality. In particular, retain the new frontend model
-   picker and backend shared-model request forwarding.
+2. Use `feature/retail-distributor-integration` for the second stage. It already
+   includes this Retail update and preserves Distributor functionality. Supply
+   its existing Distributor settings, tables and prepared knowledge as documented
+   in that branch's `docs/distributor-integration.md`.
 3. The second stage builds only a new backend and frontend. It reuses the first
    deployment's Retail agent, Supplier agent and MCP server, so any shared OpenAI key
    stays configured on the existing Retail agent. It does not need to be copied

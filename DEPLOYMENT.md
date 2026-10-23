@@ -1,8 +1,8 @@
 # AI World deployment guide
 
-## Current release: ai-world-retail-demo
+## Current release: R-I-Cloudworld
 
-Deploy [ai-world-retail-demo](https://github.com/mrigankmishra100/Retail-test-repo/tree/ai-world-retail-demo)
+Deploy [R-I-Cloudworld](https://github.com/mrigankmishra100/Retail-test-repo/tree/R-I-Cloudworld)
 using `deployment/source-build.json`. Start fresh source inspection and build all
 five services from the same commit. The comparison updates affect frontend,
 backend and Retail-agent code; rebuilding only the merged frontend/backend cannot
