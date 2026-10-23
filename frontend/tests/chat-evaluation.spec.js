@@ -56,7 +56,7 @@ test('unconfigured shared OpenAI accepts a session key for discovery and workflo
   });
   await page.getByLabel('Chat model').selectOption('__openai__');
   const dialog = page.getByRole('dialog');
-  await expect(dialog).toContainText('Enter your API key to use OpenAI for this session.');
+  await expect(dialog).toContainText('Enter your OpenAI API key to continue.');
   await expect(dialog.getByRole('alert')).toHaveCount(0);
   await expect(dialog.getByLabel('Provider', { exact: true })).toHaveCount(0);
   await expect(dialog.getByRole('button', { name: 'Load available models' })).toBeDisabled();

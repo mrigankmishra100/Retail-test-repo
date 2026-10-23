@@ -52,7 +52,7 @@ export default function ExternalModelDialog({ onClose, onConnected, purpose = 'w
           {Object.entries(providers).map(([id, provider]) => <option key={id} value={id}>{provider.name}</option>)}
         </select></label>}
         {!useServerKey && <>
-        {serverOpenAI && <small>No shared OpenAI key is configured. Enter your API key to use OpenAI for this session.</small>}
+        {serverOpenAI && <small>Enter your OpenAI API key to continue.</small>}
         <label>API key<input required type="password" autoComplete="new-password" minLength={12} maxLength={512} value={form.api_key} onChange={(e) => { setForm((current) => ({ ...current, api_key: e.target.value, model_id: models.length ? '' : current.model_id })); setModels([]); setError(null); }} /></label>
         <a href={providers[form.provider].keyUrl} target="_blank" rel="noreferrer">Get a {providers[form.provider].name} API key ↗</a></>}
         {!useServerKey && <div className="external-model-discovery"><button type="button" disabled={form.api_key.length < 12} onClick={loadModels}>Load available models</button></div>}
