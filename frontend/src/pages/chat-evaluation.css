@@ -241,6 +241,7 @@
 .finops-bar span { display: block; height: 100%; background: #778a78; border-radius: inherit; }
 .estimated-finops details { border-top: 1px solid #eeece8; padding-top: 12px; overflow-wrap: anywhere; }
 .cloud-operations-grid > .estimated-finops { margin: 0; }
+.cloud-operations-grid > :only-child { grid-column: 1 / -1; }
 .comparison-model-actions { display: flex; justify-content: flex-end; margin-bottom: 12px; }
 .comparison-model-actions select { width: auto; min-width: 180px; padding: 8px 12px; }
 .cloud-log-toolbar { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; }
@@ -280,6 +281,9 @@
 .comparison-evidence > summary { padding: 16px 18px; }
 .comparison-results { align-items: start; }
 .comparison-answer { max-height: none; overflow: visible; }
+.comparison-answer .markdown-table { max-width: 100%; }
+.comparison-answer .markdown-table table { min-width: 100%; width: max-content; }
+.comparison-answer .markdown-table th, .comparison-answer .markdown-table td { min-width: 100px; max-width: 260px; overflow-wrap: break-word; word-break: normal; }
 .comparison-card header { background: #fcfbf9; }
 .comparison-card .eyebrow { font-size: 10px; color: #82786d; }
 @media (max-width: 650px) { .comparison-model-actions { align-items: flex-start; flex-direction: column; } .comparison-toolbar { width: 100%; justify-content: space-between; flex-wrap: wrap; } }

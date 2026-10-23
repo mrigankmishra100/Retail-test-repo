@@ -64,16 +64,16 @@ approve orders or guarantee real distributor terms. The current document is
    inspection so it pins the new commit instead of resuming an older build.
 2. Sign in as the supplier who will use the API. In **Agent registry**, choose
    **Custom**, enter any display name and the complete URL above, and select Active.
-   Check **Use for delivery questions in this session**. The **Bearer token
-   (optional)** field accepts the token value or `Bearer <token>`. Click **Register
+   The always-visible **Bearer token (optional)** field accepts the token value
+   or `Bearer <token>`. Click **Register
    agent** once to create the entry and save its private session connection.
    Leave the field blank only when the API permits unauthenticated access; no
    Authorization header is sent in that mode. The current distributor API requires
    its integration token. Registration does not call the remote API or validate it.
    If connection saving fails, the entry remains and the UI explains how to retry
-   on that entry without registering a duplicate. Unchecked entries remain ordinary
-   registry entries and do not grant delivery capability. Existing DELIVERY entries
-   remain supported; names do not determine routing.
+   on that entry without registering a duplicate. Supplier Custom registration
+   automatically selects that API for delivery questions, replacing the previous
+   session selection. Existing DELIVERY entries remain supported; names do not determine routing.
 3. To connect an existing entry or a new login session, expand **Connect delivery
    API**, enter its token if needed and choose **Connect for this session**.
    Submitting a blank field explicitly replaces any saved token with an unauthenticated
@@ -90,6 +90,10 @@ approve orders or guarantee real distributor terms. The current document is
    question to the distributor. Connection status does not validate the remote
    token: the first delivery question checks API authorization.
 4. In supplier chat ask: “Compare BlueDart and Delhivery delivery timelines.”
+   Explicit delivery/distributor questions use the current session selection directly
+   after guardrail checks. Connecting takes effect in an existing chat without a refresh.
+   Without an available connection, chat explains its supported scope without setup
+   instructions. Configuration questions can still ask for setup help explicitly.
 5. Expand activity to see `ask_delivery_agent` and **Calling delivery agent via
    REST**. Check that the displayed answer matches the API's `answer`, including
    its inline source references and without app-added commentary.

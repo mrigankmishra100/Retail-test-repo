@@ -120,7 +120,11 @@ def test_comparison_runs_two_external_profiles_with_read_only_tools(container):
     with patch.object(ExternalModelClient, '_post', respond):
         service.evaluate(job['run_id'], request, session)
     result = service.get_evaluation(job['run_id'], session=session)
-    assert result['status'] == 'completed' and calls == ['gemini', 'gemini', 'anthropic', 'anthropic']
+    assert result['status'] == 'completed'
+    # Concurrent providers may interleave calls; published results retain selection order.
+    assert sorted(calls) == ['anthropic', 'anthropic', 'gemini', 'gemini']
+    assert [row['profile_id'] for row in result['results']] == request.model_profiles
+    assert [row['metrics']['provider'] for row in result['results']] == ['gemini', 'anthropic']
     assert all(row['metrics']['status'] == 'completed' for row in result['results'])
     assert KEY not in json.dumps(result)
     with pytest.raises(ValueError):

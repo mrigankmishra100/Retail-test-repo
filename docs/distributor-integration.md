@@ -2,9 +2,11 @@
 
 ## What is included
 
-This branch is based on `R-I-Cloudworld` at
-`b2698eefa6adcff596947771e499cb8313dea412`. It retains the existing Retail manager
-and Supplier backend routes, agent clients and UI. Distributor runs **inside the
+`retail-distributor-merged` combines the integration branch at `a0119e2` with
+`ai-world-retail-demo` at `7a9d3e9`; their shared Cloudworld base is
+`b2698eefa6adcff596947771e499cb8313dea412`. It retains the Distributor implementation
+and incorporates the latest Retail/Supplier delivery routing, OpenAI model picker,
+comparison fixes and UI updates. Existing role and backend boundaries are retained. Distributor runs **inside the
 same backend process**; there is no new Distributor pod or HTTP forwarding to
 the original backend.
 
@@ -131,6 +133,20 @@ do not use the old empty-schema cleanup logic on a shared upgraded schema.
 
 ## Local verification
 
+Merged release validation on 2026-10-23:
+
+- Full application suite: 730 tests and 23 subtests passed; one live Oracle test
+  skipped because no explicit test-schema opt-in was provided.
+- Combined browser suite: 94 tests passed, covering Retail/Supplier workflows,
+  registry, OpenAI selection, comparisons, Distributor role isolation, source
+  rendering, desktop/mobile layout and accessibility.
+- Production frontend build and the reviewed dashboard's five-service settings,
+  routing and hosted registry proxy preflight passed with synthetic credentials.
+- Distributor runtime implementation and dependency pins remain unchanged from
+  `a0119e2`; AI World chat/comparison logic remains unchanged from `7a9d3e9`.
+- No new cloud deployment, image builds or live knowledge ingestion were run.
+
+
 Backend tests block external network calls and use SQLite plus provider fakes.
 They exercise the real RAG workflow, Oracle repository contracts, role checks,
 configuration mapping, guardrail failures, citation handling and error paths.
@@ -153,7 +169,7 @@ Microsoft Edge. The Linux runtime lock is `backend/requirements.lock`; Windows
 testing omits Linux-only `uvloop`. Runtime dependency versions are otherwise
 retained, with SQLAlchemy/greenlet added for Distributor.
 
-Verified locally on 2026-10-21:
+Historical integration-branch validation on 2026-10-21:
 
 - With the Oracle 19c adapter: 692 application tests and 9 subtests passed;
   1 live Oracle test was skipped.
@@ -185,6 +201,12 @@ Additional local Ashburn preflight on 2026-10-21:
   Oracle setup/ingestion verification; restore a reviewed database target first.
 
 ## Before VM deployment
+
+For this merged release, deploy the five-service `ai-world-retail-demo` release
+at `7a9d3e9` first, then select `retail-distributor-merged` for the side-by-side
+backend/frontend update. Configure OpenAI on the reused Retail agent; Distributor
+continues using its separate OCI settings. The [deployment handoff](ai-world-deployment-handoff.md)
+explains the private key and first-stage version requirement.
 
 This source merge is **not** the dashboard's side-by-side deployment feature.
 `deployment/source-build.json` still describes the existing five-service full

@@ -88,6 +88,9 @@ def test_three_server_managed_roles_and_distributor_answer(harness):
     ('/registry/agents','GET',None), ('/chat/models','GET',None),
     ('/supplier/policy','GET',None), ('/memory/approved','GET',None),
     ('/chat','POST',{'message':'Show stock', 'intent':'conversation'}),
+    ('/chat/external-model-options','POST',{'provider':'openai', 'use_server_key':True}),
+    ('/chat/external-models','POST',{'provider':'openai', 'use_server_key':True, 'model_id':'fixture-model'}),
+    ('/chat/evaluations','POST',{'message':'Compare inventory', 'model_profiles':['baseline','comparison']}),
 ])
 def test_distributor_cannot_use_business_endpoints(harness, path, method, body):
     client, *_ = harness
@@ -195,6 +198,7 @@ def test_resource_principal_identity_never_loads_user_key(monkeypatch):
 def test_private_model_mapping_and_isolated_object_prefix(override):
     from pydantic import ValidationError
     values = dict(distributor_enabled=True, oci_region='us-ashburn-1',
+        openai_api_key='sk-fixture-retail-only', enterprise_ai_model_id='retail-model',
         oci_compartment_id='fixture-compartment', oci_namespace='fixture-namespace',
         oci_bucket_name='existing-bucket', distributor_llm_model_id='fixture-answer-model',
         distributor_llm_endpoint='https://inference.generativeai.us-ashburn-1.oci.oraclecloud.com',
@@ -207,6 +211,9 @@ def test_private_model_mapping_and_isolated_object_prefix(override):
     else:
         mapped = provider_settings(settings)
         assert mapped.oci_bucket == 'existing-bucket'
+        assert settings.openai_api_key.get_secret_value() == 'sk-fixture-retail-only'
+        assert mapped.oci_llm_model_id == 'fixture-answer-model'
+        assert 'sk-fixture-retail-only' not in mapped.model_dump_json()
         assert mapped.oci_embedding_dimensions == 1024
         assert mapped.object_storage_prefix == 'distributor/knowledge/'
 

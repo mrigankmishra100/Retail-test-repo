@@ -48,6 +48,28 @@ BLOCKED_MESSAGE = (
 )
 
 
+def has_unverified_action_claim(answer):
+    """Distinguish analytical work from claims of business execution.
+
+    Only explicit analysis artifacts are exempt. Ambiguous claims and passive
+    claims about case/order state remain blocked, as do mixed execution claims.
+    """
+    artifacts = {
+        'selected': r'(?:(?:the|following|top|up to)\s+)*(?:(?:one|two|three|\d+)\s+)?(?:(?:highest[- ]risk|at[- ]risk|priority)\s+)?(?:items|products|skus)\b',
+        'created': r'(?:(?:a|the|this)\s+)?(?:(?:comparison|summary|recommendation)\s+)?(?:table|summary|analysis|comparison|list|recommendations?)\b',
+        'completed': r'(?:(?:the|this|my|our|a)\s+)?(?:(?:inventory|supplier|risk|stockout)\s+)?(?:analysis|comparison|review|assessment|summary)\b',
+    }
+    for match in ACTION_CLAIM.finditer(answer):
+        verb = match.group().split()[-1].lower()
+        first_person = re.match(r'(?:i|we)\b', match.group(), re.I)
+        tail = re.split(r'[.!?\n]', answer[match.end():], maxsplit=1)[0].strip()
+        if (first_person and verb in artifacts and re.match(artifacts[verb], tail, re.I)
+                and not re.search(r'\b(?:approved|rejected|dispatched|sent|submitted|placed|created|closed|completed|selected|orders?|purchases?|cases?|requests?|bookings?)\b', tail, re.I)):
+            continue
+        return True
+    return False
+
+
 def is_action_request(message):
     # Informational questions about the process remain answerable; action commands do not.
     if re.match(r"^\s*(?:how|what|why|where|when|explain|describe)\b", message, re.IGNORECASE):

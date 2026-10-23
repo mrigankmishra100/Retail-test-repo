@@ -19,7 +19,14 @@ from app.services.retail_conversation import security_response, is_action_reques
 from app.observability import LangfuseObservabilityClient, TraceContext
 
 logger = logging.getLogger(__name__)
-DELIVERY_LOOKUP = re.compile(r'\b(distributors?|couriers?|carriers?|logistics|blue\s?dart|delhivery|ekart|dtdc)\b|\b(delivery|shipping)\s+(options?|services?|providers?|companies|aggregators?)\b', re.I)
+DELIVERY_LOOKUP = re.compile(r'\b(distributors?|couriers?|carriers?|logistics|blue\s?dart|delhivery|ekart|dtdc|delivery|deliveries|shipping)\b', re.I)
+DELIVERY_HELP = re.compile(r'\b(register|registration|connect|connection|integrat\w*|api|token|guardrails?|architecture|workflow|approval|tools?)\b', re.I)
+DELIVERY_SCOPE_MESSAGE = 'I can help with your assigned requests, supplier stock, policy terms and approval workflow. I do not currently have delivery or distributor information to answer that question.'
+
+
+def is_delivery_lookup(message):
+    # Configuration/workflow explanations are still answered by supplier chat.
+    return bool(DELIVERY_LOOKUP.search(message) and not DELIVERY_HELP.search(message))
 
 
 class SupplierConversationService:
@@ -83,9 +90,20 @@ class SupplierConversationService:
             elif is_action_request(request.message):
                 response.update(message=BLOCKED_MESSAGE, llm_status='blocked', guardrail_status='BLOCKED',
                     security_details=local_security_decision('action_requires_approval'))
-            elif not delivery['available'] and DELIVERY_LOOKUP.search(request.message):
+            elif not delivery['available'] and is_delivery_lookup(request.message):
                 event('delivery_capability', 'unavailable', tool='ask_delivery_agent')
-                response.update(message=delivery['message'])
+                response.update(message=DELIVERY_SCOPE_MESSAGE, mode='scope_guidance')
+            elif delivery['available'] and is_delivery_lookup(request.message):
+                # The current registry/session state is authority. A model must not
+                # skip a lookup and substitute a stale capability claim from history.
+                try:
+                    result = tools.call('ask_delivery_agent', message=request.message)
+                except Exception:
+                    logger.warning('supplier_delivery_lookup_unavailable')
+                    result = {'status': 'unavailable', 'message': 'I could not retrieve delivery information right now. Please try again.'}
+                response.update(message=result['message'], used_tools=['ask_delivery_agent'],
+                    mode='delivery_answer' if result['status'] == 'completed' else 'deterministic_read_only',
+                    llm_status='completed' if result['status'] == 'completed' else 'unavailable')
             elif not re.search(r'\b(delivery|deliveries|distributors?|shipping)\b', request.message, re.I) and re.search(r'\b(requests?|pending|incoming)\b', request.message, re.I) and re.search(
                     r'\b(show|display|list|pending|incoming)\b', request.message, re.I):
                 pending = bool(re.search(r'\b(pending|awaiting)\b', request.message, re.I))
@@ -123,8 +141,10 @@ class SupplierConversationService:
                 except Exception:
                     logger.warning('supplier_conversation_unavailable', exc_info=True)
                     response.update(message='Supplier conversation is temporarily unavailable. Your saved requests and approval controls remain available.', llm_status='unavailable')
-            turns = history + [{'role': 'user', 'content': request.message},
-                               {'role': 'assistant', 'content': response['message']}]
+            # Keep operational errors/scope notices in the UI, not as stale facts
+            # for the next model turn. Reconnection never requires a new chat.
+            turns = history if response['mode'] == 'scope_guidance' or response['llm_status'] == 'unavailable' else history + [
+                {'role': 'user', 'content': request.message}, {'role': 'assistant', 'content': response['message']}]
             turns = turns[-20:]
             while sum(len(t['content']) for t in turns) > 120000:
                 turns = turns[2:]

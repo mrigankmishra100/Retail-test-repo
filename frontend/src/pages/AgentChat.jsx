@@ -223,9 +223,10 @@ export default function AgentChat({ session, thread, setThread, onChange, chatTa
       <div className="chat-header">
         <h2>{retail ? 'Retail agent' : 'Supplier agent'}</h2>
       {retail && <div className="chat-model-bar">
-        <label><span className="sr-only">Chat model</span><select aria-label="Chat model" title="Switching starts fresh model context, preserves this transcript, and applies to remaining workflow AI steps." value={modelProfile} disabled={action.busy || catalog.loading} onChange={(e) => e.target.value === '__external__' ? setExternalDialog(true) : changeModel(e.target.value)}>
+        <label><span className="sr-only">Chat model</span><select aria-label="Chat model" title="Switching starts fresh model context, preserves this transcript, and applies to remaining workflow AI steps." value={modelProfile} disabled={action.busy || catalog.loading} onChange={(e) => e.target.value === '__openai__' ? setExternalDialog('openai') : e.target.value === '__external__' ? setExternalDialog('external') : changeModel(e.target.value)}>
           {!models.length && <option value="">Choose a model</option>}
           {models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+          <option value="__openai__">OpenAI…</option>
           <option value="__external__">External model…</option>
         </select></label>
         <label title={selectedModel?.file_search ? 'Search configured policy vector stores using OCI built-in File Search' : 'Requires configured vector stores and a compatible model'}>
@@ -233,7 +234,7 @@ export default function AgentChat({ session, thread, setThread, onChange, chatTa
         <button type="button" className="evaluation-shortcut" aria-label="Evaluation & metrics" title="Evaluation & metrics" onClick={openEvaluation}><Icon name="chart" size={15} /><span className="evaluation-shortcut-label">Metrics</span></button>
         <ErrorNotice error={catalog.error} retry={catalog.reload} />
       </div>}
-      {externalDialog && <ExternalModelDialog onClose={() => setExternalDialog(false)} onConnected={async (profile) => {
+      {externalDialog && <ExternalModelDialog serverOpenAI={externalDialog === 'openai'} onClose={() => setExternalDialog(false)} onConnected={async (profile) => {
         setConnectedModels((current) => [...current, profile]);
         const changed = await changeModel(profile.id, false, profile);
         catalog.reload();
@@ -271,7 +272,7 @@ export default function AgentChat({ session, thread, setThread, onChange, chatTa
               {m.workflowRun && <WorkflowHistory run={m.workflowRun} />}
               {m.role === 'assistant' && <SecurityDecision details={m.security_details} status={m.guardrail_status} />}
               {m.message && (m.role === 'assistant' ? (!['BLOCKED', 'FAILED'].includes(m.guardrail_status) && <Markdown>{m.message}</Markdown>) : <p>{m.message}</p>)}
-              {m.mode && !['BLOCKED', 'FAILED'].includes(m.guardrail_status) && <Badge>{['unavailable', 'disabled', 'limit_reached'].includes(m.llm_status) ? 'Answer unavailable' : m.mode === 'delivery_answer' ? 'Delivery agent response' : m.mode === 'llm_read_only' ? 'Model-assisted answer' : 'Verified workflow facts'}</Badge>}
+              {m.mode && !['BLOCKED', 'FAILED'].includes(m.guardrail_status) && <Badge>{['unavailable', 'disabled', 'limit_reached'].includes(m.llm_status) ? 'Answer unavailable' : m.mode === 'scope_guidance' ? 'Available scope' : m.mode === 'delivery_answer' ? 'Delivery agent response' : m.mode === 'llm_read_only' ? 'Model-assisted answer' : 'Verified workflow facts'}</Badge>}
               {m.guardrail_status === 'PASSED' && <small className="security-indicator">Prompt injection check passed</small>}
               {m.request_page && <div aria-label="Assigned requests returned by agent">
                 {m.request_page.items.map(c => <div className="activity-row" key={c.case_id}>

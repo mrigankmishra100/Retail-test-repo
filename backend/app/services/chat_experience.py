@@ -1,5 +1,7 @@
 """Scoped model selection and bounded, read-only comparison runs."""
 from copy import copy
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextvars import copy_context
 from threading import BoundedSemaphore, Lock
 from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -15,7 +17,7 @@ from app.contracts import ChatRequest
 from app.enterprise_ai.conversation import EnterpriseAIConversationClient
 from app.services.cases import CaseService, CaseConflict, CaseNotFound
 from app.services.retail_conversation import (RetailConversationService, is_action_request,
-    ACTION_CLAIM, BLOCKED_MESSAGE)
+    has_unverified_action_claim, BLOCKED_MESSAGE)
 
 
 class EvaluationRequest(BaseModel):
@@ -44,6 +46,7 @@ class ChatCatalog(BaseModel):
     route: str
     tool_execution: str
     nl2sql_enabled: bool
+    configured_providers: list[str] = Field(default_factory=list)
 
 
 class ChatContainerView:
@@ -73,6 +76,7 @@ class ChatExperienceService:
         configured = available_profiles(self.container, session)
         return {'models': [{**p.model_dump(), 'file_search': p.file_search and bool(settings.enterprise_ai_vector_store_ids)}
                            for p in configured.values()],
+            'configured_providers': ['openai'] if getattr(settings, 'openai_api_key', None) else [],
             'enabled': settings.enterprise_ai_responses_enabled or any(p.provider != 'oci' for p in configured.values()),
             'regional_evaluation_enabled': True,
             'default_profile': next(iter(configured), None), 'route': 'local_retail_agent',
@@ -96,6 +100,7 @@ class ChatExperienceService:
         if self.remote:
             return self.container.remote_retail_agent.invoke('connect_model', {'config': config.wire()}, session)
         from app.enterprise_ai.external import ExternalModelClient
+        config = config.resolved(self.container.settings)
         ExternalModelClient(config).validate_connection()
         return self.container.external_models.register(config, session).model_dump(mode='json')
 
@@ -104,6 +109,7 @@ class ChatExperienceService:
         if self.remote:
             return self.container.remote_retail_agent.invoke('discover_models', {'config': config.wire()}, session)
         from app.enterprise_ai.external import ExternalModelClient
+        config = config.resolved(self.container.settings)
         return {'models': ExternalModelClient(config).available_models()}
 
     def scoped_container(self, profile, rag, trace, session, regional=None):
@@ -262,7 +268,7 @@ class ChatExperienceService:
             run = service._run(session=session, message=request.message, check_scope=True)
             if run.get('failed_tools'):
                 run = {**run, 'answer': 'The requested live data could not be verified.', 'llm_status': 'unavailable'}
-            if ACTION_CLAIM.search(run['answer']):
+            if has_unverified_action_claim(run['answer']):
                 run = {**run, 'answer': BLOCKED_MESSAGE, 'llm_status': 'blocked',
                        'security_details': local_security_decision('unverified_action_claim', source='model')}
         return {'message': run['answer'], 'llm_status': run['llm_status'], 'used_tools': run['used_tools'],
@@ -306,27 +312,38 @@ class ChatExperienceService:
             self.slots.release()
 
     def evaluate(self, identifier, request, session):
-        owner, results = str(session.session_id), []
-        try:
-            for profile in request.model_profiles:
-                self.store.save(owner, identifier, 'comparison', {'status': 'running', 'message': request.message,
-                    'regional_model': request.regional_model.public_details() if request.regional_model else None,
-                    'model_profiles': request.model_profiles, 'use_file_search': request.use_file_search, 'results': results})
-                try:
-                    result = self.respond(ChatRequest(message=request.message, intent='conversation', model_profile=profile,
-                        use_file_search=request.use_file_search), session=session, evaluation=True, expected_terms=request.expected_terms,
-                        **({'regional': request.regional_model} if profile == REGIONAL_PROFILE else {}))
-                except Exception as exc:
-                    # Never return provider errors, prompts, SQL or credentials as logs.
-                    result = {'message': 'Model run failed. Check access and configuration.', 'profile_id': profile, 'error': True}
-                    if getattr(exc, 'public_code', None) == 'native_tools_require_responses':
-                        result['message'] = 'This model cannot use function tools with reasoning through native Chat. Choose Responses API and its Responses model ID.'
-                    if getattr(exc, 'chat_metrics', None):
-                        result['metrics'] = exc.chat_metrics
-                results.append(result)
-            self.store.save(owner, identifier, 'comparison', {'status': 'completed', 'message': request.message,
+        owner, results = str(session.session_id), {}
+        def save(status):
+            self.store.save(owner, identifier, 'comparison', {'status': status, 'message': request.message,
                 'regional_model': request.regional_model.public_details() if request.regional_model else None,
-                'model_profiles': request.model_profiles, 'use_file_search': request.use_file_search, 'results': results})
+                'model_profiles': request.model_profiles, 'use_file_search': request.use_file_search,
+                'results': [results[p] for p in request.model_profiles if p in results]})
+
+        def run(profile):
+            try:
+                result = self.respond(ChatRequest(message=request.message, intent='conversation', model_profile=profile,
+                    use_file_search=request.use_file_search), session=session, evaluation=True, expected_terms=request.expected_terms,
+                    **({'regional': request.regional_model} if profile == REGIONAL_PROFILE else {}))
+            except Exception as exc:
+                # Never return provider errors, prompts, SQL or credentials as logs.
+                result = {'message': 'Model run failed. Check access and configuration.', 'llm_status': 'failed', 'error': True}
+                if getattr(exc, 'public_code', None) == 'native_tools_require_responses':
+                    result['message'] = 'This model cannot use function tools with reasoning through native Chat. Choose Responses API and its Responses model ID.'
+                if getattr(exc, 'chat_metrics', None):
+                    result['metrics'] = exc.chat_metrics
+            return {**result, 'profile_id': profile}
+
+        try:
+            save('running')
+            # At most three read-only runs per comparison; the existing two-job
+            # capacity limit still applies. Each worker gets independent context
+            # variables, model selection and trace. Works for local and hosted calls.
+            with ThreadPoolExecutor(max_workers=len(request.model_profiles), thread_name_prefix='model-comparison') as executor:
+                futures = {executor.submit(copy_context().run, run, profile): profile for profile in request.model_profiles}
+                for future in as_completed(futures):
+                    results[futures[future]] = future.result()
+                    save('running')
+            save('completed')
         finally:
             self.release(owner)
 

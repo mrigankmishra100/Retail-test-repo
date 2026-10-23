@@ -47,6 +47,7 @@ class Settings(JsonSettingsMixin, BaseSettings):
 
     enterprise_ai_endpoint: str | None = None
     enterprise_ai_model_id: str | None = None
+    openai_api_key: SecretStr | None = Field(default=None, repr=False)
     chat_model_profiles: list[ChatModelProfile] = Field(default_factory=list, max_length=12)
     chat_metrics_path: Path = REPOSITORY_ROOT / 'runtime' / 'chat-metrics.sqlite3'
     enterprise_ai_responses_enabled: bool = False

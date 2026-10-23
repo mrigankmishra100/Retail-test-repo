@@ -1,5 +1,55 @@
 import { test, expect } from '@playwright/test';
 
+test('shared OpenAI option loads models without browser credentials and selects the workflow provider', async ({ page }, info) => {
+  await setup(page);
+  const profile = { id: 'external-server-openai', label: 'Fixture text model · OpenAI', model_id: 'fixture-text-model', provider: 'openai', file_search: false };
+  await page.route('**/api/chat/external-model-options', route => {
+    expect(route.request().postDataJSON()).toEqual({ provider: 'openai', use_server_key: true });
+    return route.fulfill({ json: { models: ['fixture-text-model', 'another-text-model'] } });
+  });
+  await page.route('**/api/chat/external-models', route => {
+    expect(route.request().postDataJSON()).toEqual({ provider: 'openai', use_server_key: true, model_id: 'fixture-text-model', max_tokens: null });
+    return route.fulfill({ status: 201, json: { profile } });
+  });
+  const options = await page.getByLabel('Chat model').locator('option').allTextContents();
+  expect(options[2]).toBe('OpenAI…');
+  await page.getByLabel('Chat model').selectOption('__openai__');
+  const dialog = page.getByRole('dialog', { name: 'Choose an OpenAI model' });
+  await expect(dialog.getByLabel('API key', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByLabel('Maximum output tokens')).toHaveCount(0);
+  const box = await dialog.boundingBox();
+  expect(Math.abs(box.x + box.width / 2 - page.viewportSize().width / 2)).toBeLessThan(2);
+  expect(Math.abs(box.y + box.height / 2 - page.viewportSize().height / 2)).toBeLessThan(2);
+  expect(box.height).toBeLessThan(500);
+  await expect(page.getByText('POC ENVIRONMENT', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole('combobox', { name: 'Model ID', exact: true })).toHaveValue('');
+  await dialog.getByLabel('Model ID', { exact: true }).selectOption(profile.model_id);
+  await page.screenshot({ path: info.outputPath('server-openai.png') });
+  await dialog.getByRole('button', { name: 'Use model', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByLabel('Chat model')).toHaveValue(profile.id);
+  await expect(page.getByLabel('File Search / RAG', { exact: true })).toBeDisabled();
+  await page.route('**/api/chat', route => {
+    const body = route.request().postDataJSON();
+    expect(body.model_profile).toBe(profile.id);
+    expect(body).not.toHaveProperty('api_key');
+    return route.fulfill({ json: { message: 'Shared OpenAI response', mode: 'llm_read_only' } });
+  });
+  await page.getByLabel('Message to agent').fill('Compare supplier lead times');
+  await page.getByLabel('Message to agent').press('Enter');
+  await expect(page.getByRole('log')).toContainText('Shared OpenAI response');
+});
+
+test('unconfigured shared OpenAI leaves the current selection unchanged', async ({ page }) => {
+  await setup(page);
+  await page.route('**/api/chat/external-model-options', route => route.fulfill({ status: 502, json: { error: { message: 'OpenAI is not configured on the Retail agent.' } } }));
+  await page.getByLabel('Chat model').selectOption('__openai__');
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('alert')).toContainText('OpenAI is not configured');
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByLabel('Chat model')).toHaveValue('flash');
+});
+
 test('comparison connects an external model without changing the chat workflow or storing its key', async ({ page }, info) => {
   const state = await setup(page);
   const profile = { id: 'external-compare', label: 'External OpenAI', model_id: 'gpt-fixture', provider: 'openai', file_search: false };
@@ -15,7 +65,7 @@ test('comparison connects an external model without changing the chat workflow o
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByLabel('Add comparison model').selectOption('external');
   const dialog = page.getByRole('dialog');
-  await expect(dialog).toContainText('same prompt and read-only tools');
+  await expect(dialog).toContainText('Choose a model to compare.');
   await dialog.getByLabel('Provider', { exact: true }).selectOption('openai');
   await dialog.getByLabel('API key', { exact: true }).fill('comparison-fixture-secret');
   await dialog.getByRole('button', { name: 'Load available models' }).click();
@@ -34,8 +84,12 @@ test('comparison connects an external model without changing the chat workflow o
   await expect(page.getByLabel('Chat model')).toHaveValue('flash');
 });
 
-test('OCI logs support source details, filters, time windows and mobile layout', async ({ page }, info) => {
+test('cloud monitoring keeps log summaries and Langfuse without the OCI event browser', async ({ page }, info) => {
   await setup(page);
+  await page.route('**/api/chat/tracing', route => route.fulfill({ json: {
+    status: 'configured', scope: 'This backend service', dashboard_url: 'https://tracing.example.test',
+    message: 'Configured for asynchronous export.',
+  } }));
   const requests = [];
   await page.route('**/api/chat/central-logs*', (route) => {
     requests.push(route.request().url());
@@ -45,23 +99,22 @@ test('OCI logs support source details, filters, time windows and mobile layout',
         { timestamp: new Date().toISOString(), stage: 'function_tool', mcp_tool: 'get_inventory_risk', status: 'failed', trace_id: 'failed-trace', level: 'ERROR', duration_ms: 125, service: 'retail-agent' }] } });
   });
   await openEvaluation(page, 'Cloud monitoring');
-  const events = page.getByRole('region', { name: 'OCI application events' });
-  await expect(events.locator('tbody tr')).toHaveCount(2);
-  await events.getByRole('button', { name: 'Tool · get_inventory_risk' }).click();
-  await expect(events.locator('.cloud-log-record')).toContainText('failed-trace');
-  await events.getByLabel('Log severity').selectOption('errors');
-  await expect(events.locator('tbody tr')).toHaveCount(1);
-  await events.getByLabel('Search logs').fill('no-match');
-  await expect(events).toContainText('No events match these filters.');
-  await events.getByLabel('Search logs').fill('');
-  await events.getByLabel('Log time range').selectOption('6');
-  await expect.poll(() => requests.some((url) => url.endsWith('?hours=6'))).toBe(true);
+  await expect(page.getByRole('region', { name: 'OCI application events' })).toHaveCount(0);
+  await expect(page.getByLabel('Log time range')).toHaveCount(0);
+  await expect(page.getByLabel('Search logs', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Langfuse tracing' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open Langfuse' })).toHaveAttribute('href', 'https://tracing.example.test');
+  await expect(page.locator('.cloud-log-counts')).toContainText('2 retrieved events');
+  await expect(page.locator('.cloud-log-counts')).toContainText('1 errors / blocks');
+  const before = requests.length;
+  await page.getByRole('button', { name: 'Refresh cloud data' }).click();
+  await expect.poll(() => requests.length).toBeGreaterThan(before);
   await page.getByText('Log delivery & source', { exact: true }).click();
   await expect(page.locator('.log-delivery-details')).toContainText('Counters reset on restart');
-  await page.screenshot({ path: info.outputPath('oci-events-desktop.png'), fullPage: true });
+  await page.screenshot({ path: info.outputPath('cloud-summary-desktop.png'), fullPage: true, animations: 'disabled' });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.screenshot({ path: info.outputPath('oci-events-mobile.png'), fullPage: true });
+  await page.screenshot({ path: info.outputPath('cloud-summary-mobile.png'), fullPage: true, animations: 'disabled' });
 });
 
 test('external model details appear only from the dropdown and its handle runs chat and workflow', async ({ page }, info) => {
@@ -106,6 +159,48 @@ test('external model details appear only from the dropdown and its handle runs c
   expect(connectBody.api_key).toBe('fixture-external-secret');
   expect(await page.evaluate(() => JSON.stringify([localStorage, sessionStorage]))).not.toContain('fixture-external-secret');
 });
+
+test('OpenAI model picker fits mobile and restores focus when dismissed', async ({ page }, info) => {
+  await setup(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/api/chat/external-model-options', route => route.fulfill({ json: { models: ['fixture-text-model'] } }));
+  await page.getByLabel('Chat model').focus();
+  await page.getByLabel('Chat model').selectOption('__openai__');
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Model ID', { exact: true })).toBeEnabled();
+  const box = await dialog.boundingBox();
+  expect(box.x).toBeGreaterThanOrEqual(15);
+  expect(box.x + box.width).toBeLessThanOrEqual(375);
+  expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath('openai-mobile.png') });
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByLabel('Chat model')).toBeFocused();
+  await expect(page.getByLabel('Chat model')).toHaveValue('flash');
+});
+
+for (const scenario of ['missing-usage', 'missing-price', 'negative-price', 'zero-cost']) {
+  test(`cost visibility is accurate for ${scenario}`, async ({ page }, info) => {
+    await setup(page);
+    const complete = scenario !== 'missing-usage';
+    await page.route('**/api/chat/metrics', route => route.fulfill({ json: { records: [{
+      id: 'cost-fixture', kind: 'turn', metrics: {
+        run_id: 'cost-fixture', profile_id: 'flash', model_id: 'fixture-model', status: 'completed',
+        input_tokens: complete ? 0 : null, output_tokens: complete ? 0 : null, usage_complete: complete,
+        model_cost_usd: scenario === 'missing-price' ? null : scenario === 'negative-price' ? -1 : 0,
+        duration_ms: 1000, calls: [], events: [], estimated_rates: { input_usd_per_million: 0.3, output_usd_per_million: 2.5 },
+      },
+    }] } }));
+    await openEvaluation(page, 'Overview');
+    const panel = page.locator('#eval-view-overview .estimated-finops');
+    if (scenario === 'zero-cost') await expect(panel).toContainText('$0.0000');
+    else await expect(panel).toHaveCount(0);
+    if (!complete) {
+      await expect(page.locator('.session-metrics-grid article').first()).toContainText('Not reported');
+      await page.screenshot({ path: info.outputPath('metrics-without-estimates.png') });
+    }
+  });
+}
 
 test('external connection cancellation and provider changes clear its key', async ({ page }) => {
   await setup(page);
@@ -316,7 +411,7 @@ test('estimated spend sums only priced runs and exposes rate assumptions', async
   const costs = page.locator('#eval-view-overview .estimated-finops');
   await expect(costs).toContainText('$0.00112');
   await expect(costs).toContainText('1 / 2 runs priced');
-  await expect(costs).toContainText('Not estimated');
+  await expect(costs).not.toContainText('Not estimated');
   await costs.getByText('Rates & coverage', { exact: true }).click();
   await expect(costs).toContainText('Reasoning tokens are already included in output');
   await expect(costs).toContainText('input 0.3');
@@ -416,7 +511,9 @@ test('regional comparison form is evaluation-only and clears its credential', as
   await expect.poll(async () => (await page.locator('.main-content').boundingBox()).x).toBeGreaterThan(200);
   await page.screenshot({ path: info.outputPath('clean-evaluation.png'), animations: 'disabled' });
   await page.getByRole('button', { name: 'Back to agent chat', exact: false }).click();
-  await expect(page.getByLabel('Chat model').locator('option')).toHaveCount(3);
+  await expect(page.getByLabel('Chat model').locator('option')).toHaveText([
+    'Gemini Flash · test fixture', 'Gemini Pro · test fixture', 'OpenAI…', 'External model…',
+  ]);
 });
 
 test('chat renders Markdown without executing HTML or loading remote images', async ({ page }) => {
@@ -666,6 +763,35 @@ test('File Search toggles preserve turns and send the new setting in the same co
   }
 });
 
+test('fast second result keeps its model label while the first model is running', async ({ page }, info) => {
+  await setup(page);
+  let finished = false;
+  await page.route('**/api/chat/evaluations', route => route.fulfill({ status: 202, json: { run_id: 'parallel-fixture', status: 'queued' } }));
+  await page.route('**/api/chat/evaluations/parallel-fixture', route => route.fulfill({ json: {
+    status: finished ? 'completed' : 'running', model_profiles: ['flash', 'pro'],
+    results: [
+      ...(finished ? [{ profile_id: 'flash', llm_status: 'failed', error: true, message: 'Model run failed. Check access and configuration.' }] : []),
+      { profile_id: 'pro', llm_status: 'completed', message: 'Fast second-model answer.' },
+    ],
+  } }));
+  await openEvaluation(page);
+  await page.getByRole('button', { name: 'Run comparison', exact: true }).click();
+  const card = page.locator('.comparison-card');
+  await expect(card).toHaveCount(1);
+  await expect(card).toContainText('MODEL 2');
+  await expect(card).toContainText('Gemini Pro · test fixture');
+  await expect(page.getByText('Models run independently.', { exact: false })).toContainText('Waiting for: Gemini Flash');
+  await expect(page.getByRole('button', { name: 'Running comparison…' })).toBeDisabled();
+  await page.screenshot({ path: info.outputPath('parallel-comparison.png'), fullPage: true, animations: 'disabled' });
+  finished = true;
+  await expect(card).toHaveCount(2);
+  await expect(card.first()).toContainText('MODEL 1');
+  await expect(card.first()).toContainText('Gemini Flash');
+  await expect(card.last()).toContainText('MODEL 2');
+  await expect(page.locator('.comparison-scorecard tbody tr').first()).toContainText('failed');
+  await expect(page.getByRole('button', { name: 'Run comparison', exact: true })).toBeEnabled();
+});
+
 test('comparison, execution map, rating and performance render together', async ({ page }, info) => {
   await setup(page);
   await openEvaluation(page);
@@ -717,6 +843,28 @@ test('mobile model selector and evaluation fit the viewport', async ({ page }, i
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: info.outputPath('model-comparison-mobile.png'), fullPage: true, animations: 'disabled' });
+});
+
+test('wide comparison answer tables scroll inside the card without crushing columns', async ({ page }, info) => {
+  await setup(page);
+  const answer = '| Item ID | Item name | Current stock | Average daily demand | Days of supply | Projected stock | Supplier | Lead time | Gap | Urgency |\n'
+    + '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n'
+    + '| ITEM001 | Ice Cream | 100 | 18.29 | 5.47 | -28 | SUP001 (Fresh Foods) | 3 days | 2.47 days | High |';
+  await page.route('**/api/chat/evaluations', route => route.fulfill({ status: 202, json: { run_id: 'wide-table', status: 'queued' } }));
+  await page.route('**/api/chat/evaluations/wide-table', route => route.fulfill({ json: {
+    status: 'completed', model_profiles: ['flash', 'pro'], results: ['flash', 'pro'].map(profile_id => ({ profile_id, llm_status: 'completed', message: answer })),
+  } }));
+  await openEvaluation(page);
+  await page.getByRole('button', { name: 'Run comparison', exact: true }).click();
+  const table = page.locator('.comparison-card .markdown-table').first();
+  await expect(table).toBeVisible();
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await expect.poll(() => table.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+    await expect.poll(() => table.locator('td').first().evaluate(el => el.getBoundingClientRect().width >= 100)).toBe(true);
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    await page.screenshot({ path: info.outputPath(`wide-table-${width}.png`), fullPage: true, animations: 'disabled' });
+  }
 });
 
 test('disabled Responses cannot start a comparison', async ({ page }) => {
@@ -774,13 +922,13 @@ test('estimated cloud costs show missing coverage without calling billing', asyn
   const state = await setup(page);
   expect(state.calls.some((call) => call.path === '/chat/official-costs')).toBe(false);
   await openEvaluation(page, 'Cloud monitoring');
-  await expect(page.locator('.cloud-operations')).toContainText('Not estimated');
+  await expect(page.locator('.cloud-operations .estimated-finops')).toHaveCount(0);
   await expect(page.locator('.cloud-operations')).not.toContainText('Live agent registry');
-  await expect(page.locator('.cloud-operations-grid > article, .cloud-operations-grid > section')).toHaveCount(2);
+  await expect(page.locator('.cloud-operations-grid > article, .cloud-operations-grid > section')).toHaveCount(1);
   await expect(page.locator('.cloud-operations')).toContainText('Live records retrieved from OCI');
   await expect(page.locator('.cloud-cost')).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'OCI application events' })).toBeVisible();
-  await expect(page.locator('.cloud-log-details')).toContainText('model-fixture');
+  await expect(page.getByRole('heading', { name: 'OCI application events' })).toHaveCount(0);
+  await expect(page.locator('.cloud-log-counts')).toContainText('1 retrieved events');
   await page.locator('.cloud-operations').screenshot({ path: info.outputPath('cloud-operations.png') });
 });
 
@@ -795,17 +943,13 @@ test('numeric OCI log statuses do not crash the evaluation panel', async ({ page
     })),
   } }));
   await openEvaluation(page, 'Cloud monitoring');
-  await expect(page.getByRole('heading', { name: 'OCI application events' })).toBeVisible();
-  const rows = page.locator('.cloud-log-details tbody tr');
-  await expect(rows).toHaveCount(4);
-  await expect(rows.nth(0).locator('td').last()).toHaveText('200');
-  await expect(rows.nth(1).locator('td').last()).toHaveText('404');
-  await expect(rows.nth(2).locator('td').last()).toHaveText('completed');
-  await expect(rows.nth(3).locator('td').last()).toHaveText('unavailable');
+  await expect(page.getByRole('heading', { name: 'OCI application events' })).toHaveCount(0);
+  await expect(page.locator('.cloud-log-counts')).toContainText('4 retrieved events');
+  await expect(page.locator('.cloud-log-counts')).toContainText('1 errors / blocks');
   await page.getByRole('button', { name: 'Back to agent chat', exact: false }).click();
   await expect(page.getByLabel('Message to agent')).toBeVisible();
   await openEvaluation(page, 'Cloud monitoring');
-  await expect(rows).toHaveCount(4);
+  await expect(page.locator('.cloud-log-counts')).toContainText('4 retrieved events');
   expect(errors).toEqual([]);
 });
 

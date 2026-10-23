@@ -37,7 +37,8 @@ def validate_delivery_url(value):
     if (len(value) > 2000 or parsed.scheme != 'https' or parsed.netloc != authority
             or not valid_host or not 1 <= port <= 65535
             or host.endswith(('.localhost', '.local', '.internal', '.test', '.invalid'))
-            or not re.fullmatch(r'/[A-Za-z0-9/_-]+', parsed.path)
+            or not re.fullmatch(r'/[A-Za-z0-9/._-]+', parsed.path)
+            or any(segment in {'.', '..'} for segment in parsed.path.split('/'))
             or '?' in value or '#' in value or any(c.isspace() for c in value)):
         raise ValueError('Delivery endpoint must be public HTTPS with a valid port and path, without query or credentials')
     return parsed

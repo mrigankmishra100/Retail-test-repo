@@ -7,6 +7,7 @@ from app.enterprise_ai.responses import EnterpriseAIResponsesClient
 from app.live_activity import activity_step
 
 EXTERNAL_ERROR_MESSAGES = {
+    'openai_not_configured': 'OpenAI is not configured on the Retail agent. Ask the operator to configure its server API key.',
     'external_model_not_found': 'The selected model is not available through this provider API for your key. Open External model and load available models before choosing one.',
     'external_model_method_unsupported': 'This model does not support content generation through the selected API. Choose another listed text model.',
     'external_rate_limit': 'The external provider rejected the request because of quota or rate limits. Check the provider limits before retrying.',
@@ -38,6 +39,10 @@ class ExternalModelClient(EnterpriseAIResponsesClient):
         if self.provider != 'openai' or method != 'POST' or path != '/responses':
             raise ValueError('Unsupported external provider operation')
         payload['include'] = ['reasoning.encrypted_content']
+        # OpenAI can use its model default. Do not impose the connection form's
+        # former 4096-token limit on each generation in a long workflow.
+        if self.max_tokens is None:
+            payload.pop('max_output_tokens', None)
         return self._post(path, payload)
 
     def _post(self, path, payload):

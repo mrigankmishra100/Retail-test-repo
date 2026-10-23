@@ -207,7 +207,7 @@ export function useAction() {
   }
   return { run, busy, error, clear: () => setError(null) };
 }
-export function Dialog({ title, onClose, children }) {
+export function Dialog({ title, onClose, children, centered = false }) {
   const ref = useRef(null);
   const titleId = useId();
   useEffect(() => {
@@ -223,7 +223,7 @@ export function Dialog({ title, onClose, children }) {
     <dialog
       ref={ref}
       aria-labelledby={titleId}
-      className="drawer"
+      className={centered ? 'drawer centered-dialog' : 'drawer'}
       onCancel={(e) => {
         e.preventDefault();
         onClose();
@@ -231,7 +231,7 @@ export function Dialog({ title, onClose, children }) {
     >
       <div className="drawer-heading">
         <h2 id={titleId}>{title}</h2>
-        <button className="icon-button" aria-label="Close detail panel" onClick={onClose}>
+        <button className="icon-button" aria-label={centered ? 'Close dialog' : 'Close detail panel'} onClick={onClose}>
           <Icon name="close" />
         </button>
       </div>

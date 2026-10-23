@@ -1,116 +1,131 @@
-# Retail Inventory Agent — V5 deployment test
+# Retail + Distributor — AI World merged demo
 
-## Distributor integration branch — local validation, not a VM rollout
+Source branch: [`retail-distributor-merged`](https://github.com/mrigankmishra100/Retail-test-repo/tree/retail-distributor-merged).
 
-This branch merges the Distributor agent into the existing `R-I-Cloudworld`
-backend and adds a third, chat-only role using the retail UI's actual styles.
-Retail manager and Supplier continue to use this backend directly.
+Integrates `feature/retail-distributor-integration` at `a0119e2` with
+`ai-world-retail-demo` at `7a9d3e9`. The existing Distributor RAG implementation,
+prepared JSON/native embedding support and chat-only role are retained.
 
-See [integration scope, configuration and local tests](docs/distributor-integration.md).
-**Do not use the normal five-service deployment flow to perform the planned
-two-application update.** The deployment dashboard's side-by-side update flow,
-resource ownership checks and live OCI validation are still separate work.
-No existing application or database is changed by checking out this branch.
+Retail and Supplier workspaces for inventory analysis, supplier comparisons and
+replenishment with explicit approval controls. The optional delivery integration
+connects Supplier chat to a registered external question/answer API. Retail users
+can select OCI models or a privately configured OpenAI model.
 
-## Existing five-service deployment (unchanged)
+## Deploy this branch
 
-V5 application source from `ORA-AIMLCOE/retail-inventory-agent` commit
-`d8d38dc122cbab84b3bf29b3a0ee37513a688335`, adapted for the existing Deployment
-Studio source-build contract. The public branch retains its public history;
-private repository history, credentials and runtime configuration are not imported.
+Use the dashboard's **Retail + Distributor side-by-side update flow** for this
+branch:
 
-Use this source URL in the one-click dashboard and select all five services:
+```text
+https://github.com/mrigankmishra100/Retail-test-repo/tree/retail-distributor-merged
+```
 
-https://github.com/mrigankmishra100/Retail-test-repo/tree/R-I-Cloudworld
+1. First deploy all five services from `ai-world-retail-demo` at `7a9d3e9` or a
+   compatible later release. Configure shared OpenAI on that Retail agent if needed.
+2. For the second stage, build the **backend and frontend** from this merged branch.
+   The update flow reuses the first deployment's Retail, Supplier and MCP endpoints
+   and shared resources, while supplying a new private backend configuration with
+   Distributor settings and prepared knowledge.
 
-The dashboard resolves the branch to an immutable commit and builds the source
-using `deployment/source-build.json`. It creates the resources, private runtime
-configuration, service keys and hosted-application URLs. No dashboard code changes
-are needed for this branch's registry demo with the locally reviewed recipe.
+`deployment/distributor-integration.json` declares the two-service integration
+contract. `deployment/source-build.json` remains the compatible full five-service
+manifest; selecting that full flow is not the two-application side-by-side update.
+Start fresh source inspection to pin the latest commit. Do not resume an older
+pinned run expecting it to acquire these changes.
 
-## What changed
+The dashboard supplies private runtime configuration, database access, service
+keys and generated URLs. This release retains that build and configuration
+contract. Compatibility checks use the locally reviewed
+`feature/retail-distributor-side-by-side` dashboard snapshot at
+`65347b23a5d55e1c8d979532ba2421fdcc925f03`; they do not certify a newer dashboard
+revision or replace live deployment checks.
 
-- V5 chat, model selection, external-model comparison, evaluation UI, security
-  details, query evidence and OCI log viewer.
-- Portable Linux/amd64 builds for `mcp-server`, `retail-agent`, `supplier-agent`,
-  `backend` and `frontend`, with public pinned base images and Oracle Thick client.
-- Gateway startup inserts missing Retail and Supplier registry entries using the
-  deployment's generated URLs. Both have the correct routed role and start active.
-- Registry enforcement is enabled in the gateway and both agent images.
-  Deactivation blocks subsequent invocations; activation restores routing.
-- Existing entries, URLs and inactive states are preserved across restarts.
-- Existing optional Langfuse tracing and no-send notification diagnostics remain.
+Read the [deployment handoff](docs/ai-world-deployment-handoff.md) before deploying,
+especially for the second-stage merged Retail + Distributor application.
+[DEPLOYMENT.md](DEPLOYMENT.md) contains the runtime contract, build commands and
+operational limits.
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for the runtime contract, demo steps, local build
-commands and limits. `deployment/source-release.json` records provenance and checks.
+## Current behavior
 
-## Updated chat and evaluation build (2026-10-16)
+- A third **Distributor** role opens a chat-only workspace with source-backed RAG
+  answers and session-local transcripts. Its own model/embedding configuration and
+  prepared knowledge are required; it does not use the Retail OpenAI selection.
+  Distributor runs inside the merged backend, without an additional hosted service.
+  See [Distributor setup and boundaries](docs/distributor-integration.md).
 
-Rebuild all five source services from the newly pushed commit. The app contains the
-12-model-call / 24-tool-call analysis budget, final-answer reservation, model-assisted
-project relevance check, OCI GPT-OSS system-message compatibility, and compact
-comparison UI. These are source changes, not settings the dashboard must enable.
-OCI ApplyGuardrails stays enabled on chat prompts through the source retail image's
-`CHAT_PROMPT_GUARDRAILS_ENABLED=true` default. Private runtime overrides still apply.
-Old images and already resolved deployment runs do not acquire new branch changes.
-See [deployment parity and analysis behavior](docs/model-operations.md).
+- Registry startup adds missing Retail/Supplier entries using generated service
+  URLs and preserves existing entries and inactive states. Deactivation blocks
+  subsequent routed invocations.
+- Supplier registration of an active Custom delivery API also selects it for the
+  current supplier session. The optional bearer-token field is always available.
+  Explicit delivery questions call the connected API directly after input checks;
+  other conversational questions can use the Supplier model and scoped tools.
+  The registry is application-specific REST integration, not an A2A registry.
+- Retail OpenAI selection uses a server-side key and the provider's model catalog.
+  It applies to retail chat and remaining workflow AI steps; approval controls
+  remain explicit. Supplier chat retains its own configured model.
+- Model comparison runs two or three models concurrently with independent context
+  and read-only tools. Results appear as each finishes, retaining selected model
+  order and accurate failure labels. Analytical statements are distinguished from
+  unsupported business-action claims in comparison answers.
+- Wide comparison tables scroll inside their cards. Cloud monitoring retains log
+  summaries and Langfuse access; the detailed OCI application events browser is
+  removed. Model-cost estimates appear only where reported usage and pricing
+  support them; they are not an OCI bill.
 
-## Supplier chat and registry update (2026-10-19, R-I-Cloudworld)
+See [chat evaluation](docs/chat-model-evaluation.md),
+[delivery API contract](docs/delivery-agent-rest-contract.md) and
+[provider and local setup](docs/cloudworld-local-changes.md).
 
-Supplier typed prompts now reach the backend instead of browser-only canned replies.
-The supplier conversation applies OCI input guardrails, restricts tools to the
-authenticated supplier, and filters pending approvals before pagination. Source
-supplier and MCP images enable `CHAT_PROMPT_GUARDRAILS_ENABLED=true` independently
-of the dashboard's older disabled flag. Rebuild all five services together.
+## Credentials and storage
 
-The reviewed dashboard leaves supplier inference disabled. In that topology the
-supplier worker delegates a typed `answer_supplier_question` call to the already
-AI-configured MCP service, where guardrails and the supplier-only conversation run.
-No retail identity or retail tool permissions are borrowed. Locally, configured
-supplier inference executes directly. Native shared File Search is not used for
-supplier chat; policy access remains supplier scoped. Session chat context is kept
-in the configured cache (last 20 messages, at most 120,000 characters, session TTL;
-process memory when Redis is absent),
-while the browser keeps the visible transcript. OCI guardrail IAM access is needed
-on the service executing the checks. Explicit private configuration can override
-image defaults. Validate resource-principal access after deployment.
+Credentials are supplied privately at runtime, never committed or baked into
+images. For shared OpenAI, set `OPENAI_API_KEY` in the hosted **retail-agent**
+private runtime JSON. Setting it only on the dashboard VM or a developer laptop
+is insufficient. The [handoff](docs/ai-world-deployment-handoff.md) explains the
+configuration helper and automatic versus manual provisioning. Without the key,
+OCI model options remain usable.
 
-AWS delivery REST registration and a supplier-only `ask_delivery_agent` tool are now
-included in this source release. See the
-[delivery REST contract and setup](docs/delivery-agent-rest-contract.md) for the AWS
-owner and deployment steps. Choose CUSTOM and any name (for example Delivery agent),
-select **Use for delivery questions in this session**, and optionally enter its bearer
-token before clicking **Register agent**. This saves the connection in the same UI
-action. Blank means no Authorization header; the current distributor endpoint still
-requires its token. Existing entries can be connected or reconnected from their row.
-That connection selects
-the destination; names and registration alone do not route chat. Custom registration
-needs no Delivery schema migration. Legacy DELIVERY entries remain supported.
-Registry changes, connections and REST calls have dedicated Langfuse observations
-when existing runtime tracing is configured. Hosted delivery connections use the
-existing Oracle app database when Redis is absent, so gateway and MCP share them.
-The connection table is created on first use; migration 006 is the owner-run
-alternative where CREATE TABLE is not permitted. Local development retains memory.
-The distributor adapter now matches the owner's `/aws-app/api/v1/answers`
-question/answer API, supports its HTTPS public IP on port 8081, and retains source
-references. Supplier chat displays the API answer directly without a model rewrite
-or app-added demo disclaimer; source/demo metadata remains in tool results and tracing.
-Live bearer authentication and response
-validation passed locally; hosted OCI end-to-end verification remains pending.
+Delivery registration stores its credential separately from `agent_registry`.
+Hosted connections use configured Redis, or `delivery_connections` in the existing
+Oracle schema when Redis is absent. The app creates/upgrades that table on first
+use; migration 006 is available for owner-managed fresh-table creation. These
+comparison/UI changes introduce no additional schema changes. The existing
+Distributor integration separately requires its seven namespaced tables and
+operator-prepared knowledge; it never initializes them at startup or chat. Local development
+uses memory for delivery connections. See DEPLOYMENT.md for grants and session limits.
 
-## Initial source-release verification (historical)
+## Run locally
 
-- 237 Python tests and 9 subtests passed, including UI API deactivation followed
-  by the actual signed-client routing boundary, for both Retail and Supplier.
-- 57 mocked browser tests passed for chat, evaluation and registry.
-- Production frontend build passed; locked npm install reported no vulnerabilities.
-- All five generated configurations from the locally available dashboard recipe
-  were accepted; its source-build validator accepted the manifest and its bundled
-  schema contains the registry table and uniqueness index.
+Use Python 3.12+ with the backend package installed (`python -m pip install -e ./backend`), Node.js with frontend
+packages installed, and your private OCI/database configuration. From the repository
+root in PowerShell, with an existing private environment file:
 
-Docker was not running on the preparation machine, so the new Linux images and
-container smoke checks have not been executed for this release. OCI deployment,
-live model calls and the deployed deactivation demo remain to be tested through
-the dashboard. No cloud resources were created during preparation.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-chat-local.ps1 -EnvFile ".\runtime-config-private\local-openai.env" -PythonExe ".\.venv\Scripts\python.exe"
+```
 
-See [self-hosted Langfuse activation and chat limits](docs/langfuse-self-hosted.md).
+Adjust those two paths to your local files. In a second terminal:
+
+```powershell
+cd frontend
+npm.cmd ci
+$env:API_PROXY_TARGET = "http://127.0.0.1:8000"
+npm.cmd run dev -- --host 127.0.0.1 --port 5173 --strictPort
+```
+
+Open http://127.0.0.1:5173. Node/npm must be installed and on PATH. Restart the
+backend after Python/configuration changes. The private environment file is not
+included in Git; a fresh checkout needs its own runtime setup.
+
+## Release verification
+
+See `deployment/source-release.json` for provenance and recorded verification.
+The current release is checked with backend regressions, browser fixtures, a
+production frontend build and the dashboard's five-service configuration preflight.
+These offline checks do not exercise live credentials, provider quotas, OCI IAM,
+Oracle schema grants or new container images. Build the first-stage five services
+and second-stage two services, then run the
+[post-deployment checks](docs/ai-world-deployment-handoff.md#verification-after-deployment)
+on the event deployment. Use one instance per service with the current local
+comparison queue; multi-replica operation requires shared queue/state design.
