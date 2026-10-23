@@ -177,16 +177,18 @@ export default function ChatEvaluation({ catalog, active, refreshKey, sessionId,
       }} />}
       <ErrorNotice error={error} retry={() => { setError(null); setPollRevision((n) => n + 1); history.reload(); }} />
       {job?.message && <details className="evaluation-run-context"><summary>Run details{job.regional_model && ` · Regional API: ${job.regional_model.api_mode === 'native_chat' ? 'Native OCI Chat' : 'Responses'}`}</summary><p>{job.message}</p><small>File Search {job.use_file_search ? 'enabled' : 'disabled'}</small></details>}
+      {['queued', 'running'].includes(job?.status) && <p role="status">Models run independently. Waiting for: {(job.model_profiles || selected).filter((id) => !job.results?.some((r) => (r.profile_id || r.metrics?.profile_id) === id)).map((id) => models.find((m) => m.id === id)?.label || id).join(', ') || 'final results'}.</p>}
       {job?.results?.length > 0 && <div className="comparison-scorecard"><h3>Results</h3><div className="events-table"><table><thead><tr><th>Model</th><th>Outcome</th><th>Latency</th><th>Input / output</th><th>Tool calls</th>{comparisonHasCosts && <th>Est. model cost</th>}<th>Your rating</th></tr></thead><tbody>{job.results.map((result, index) => {
         const metrics = byId[result.metrics?.run_id]?.metrics || result.metrics;
         const profile = metrics?.profile_id || result.profile_id || job.model_profiles?.[index];
-        return <tr key={profile || index}><th scope="row">{profile === regionalId ? job.regional_model?.label || regional.label : models.find((model) => model.id === profile)?.label || profile}</th><td>{outcome(metrics)?.replaceAll('_', ' ') || result.mode || 'Not reported'}</td><td>{duration(metrics?.duration_ms)}</td><td>{count(metrics?.input_tokens)} / {count(metrics?.output_tokens)}</td><td>{metrics ? (metrics.events || []).filter((event) => ['function_tool', 'built_in_tool'].includes(event.stage)).length : 'Not reported'}</td>{comparisonHasCosts && <td>{money(modelCost(metrics))}</td>}<td>{metrics?.quality?.human_rating ? `${metrics.quality.human_rating} / 5` : 'Not rated'}</td></tr>;
+        return <tr key={profile || index}><th scope="row">{profile === regionalId ? job.regional_model?.label || regional.label : models.find((model) => model.id === profile)?.label || profile}</th><td>{outcome(metrics)?.replaceAll('_', ' ') || result.llm_status || (result.error ? 'failed' : result.mode) || 'Not reported'}</td><td>{duration(metrics?.duration_ms)}</td><td>{count(metrics?.input_tokens)} / {count(metrics?.output_tokens)}</td><td>{metrics ? (metrics.events || []).filter((event) => ['function_tool', 'built_in_tool'].includes(event.stage)).length : 'Not reported'}</td>{comparisonHasCosts && <td>{money(modelCost(metrics))}</td>}<td>{metrics?.quality?.human_rating ? `${metrics.quality.human_rating} / 5` : 'Not rated'}</td></tr>;
       })}</tbody></table></div></div>}
       <div className="comparison-results">{job?.results?.map((result, i) => {
         const m = byId[result.metrics?.run_id]?.metrics || result.metrics;
         const profileId = m?.profile_id || result.profile_id || job.model_profiles?.[i];
         const name = profileId === regionalId ? job.regional_model?.label || regional.label : models.find((p) => p.id === profileId)?.label || profileId;
-        return <article className="comparison-card" key={profileId || i}><header><span className="eyebrow">MODEL {i + 1}</span><h3>{name}</h3></header>
+        const position = job.model_profiles?.indexOf(profileId) ?? -1;
+        return <article className="comparison-card" key={profileId || i}><header><span className="eyebrow">MODEL {position >= 0 ? position + 1 : i + 1}</span><h3>{name}</h3></header>
           <Markdown className="comparison-answer">{result.message}</Markdown><details className="comparison-evidence"><summary>Execution details &amp; sources</summary><RunMetrics metrics={m} /></details>
           {m?.quality && <div className="quality-checks"><b>Quality checks</b>
             <p>Tool success: {m.quality.tools_succeeded == null ? 'No tools called' : m.quality.tools_succeeded ? 'Passed' : 'Failed'} · Citations: {m.citations?.length || 0}</p>

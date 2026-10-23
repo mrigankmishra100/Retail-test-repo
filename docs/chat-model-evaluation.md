@@ -1,28 +1,39 @@
 # Agent Chat model switching and evaluation
 
 Agent Chat has an OCI Responses model selector and optional File Search toggle.
-Changing either starts a fresh conversation. Existing business workflows, email
-drafts and other model consumers retain `ENTERPRISE_AI_MODEL_ID`. No additional
+Changing the selection resets model conversation context while preserving the
+visible transcript. Retail model selection also applies to remaining workflow AI
+steps; Supplier chat retains its configured model. No additional
 LangChain wrapper is required: the existing Responses adapter and bounded
 LangGraph function-tool loop are reused.
 
-The evaluation section below chat compares two or three profiles using the same
-prompt, fresh context and the same read-only tool permissions. Calls run
-sequentially, with independent live database/policy reads. This is an interactive
+The Model comparison tab under Evaluation & metrics compares two or three profiles using the same
+prompt, fresh context and the same read-only tool permissions. Models run
+concurrently, with independent live database/policy reads, model clients and traces.
+Each completed result is published immediately; card numbers and final ordering
+follow the selected model order even when the second model finishes first. This is an interactive
 comparison, not a statistically controlled benchmark. Hosted conversation history
 and live approval context are not reused by evaluations.
 
-Evaluation starts collapsed to keep the chat focused. Select **Evaluation &
-metrics** in the chat toolbar or **Explore** in the panel header to open it.
-Collapsing preserves inputs, results and running comparisons. The header shows
-comparison progress while collapsed. The panel supports keyboard controls,
-mobile layouts and reduced-motion preferences; normal transitions take 120–180 ms.
+The existing limit of two comparison jobs per process remains; each job runs at
+most three models. Provider rate limits, per-call timeouts and tool-loop limits
+still apply. Comparisons do not retry failed provider calls automatically.
+The comparison action-claim check permits explicit analysis wording such as
+"I have selected three items for review" while continuing to block claims of
+approving, placing or dispatching an order. Ordinary chat behavior is unchanged.
+
+Deploy the updated frontend, backend and Retail-agent images together to apply
+these comparison fixes. Existing service URLs, runtime settings and database
+schemas remain compatible; no deployment-dashboard code change is required.
+
+Open **Evaluation & metrics** from the workspace navigation and select **Model
+comparison**. Switching tabs preserves the current comparison and results.
 
 ## Configure models
 
 ### Verified local configuration (13 October 2026)
 
-The repository `.env` now configures Gemini 2.5 Flash
+A private local `.env` used for these historical checks configured Gemini 2.5 Flash
 (`google.gemini-2.5-flash`) and GPT-OSS 120B (`openai.gpt-oss-120b`). Both
 completed live OCI Responses function-tool loops, saved conversations and history
 follow-ups in the configured Hyderabad project. GPT-OSS continuation requests
@@ -38,14 +49,15 @@ chat and comparison toggles remain opt-in; the global File Search default is
 unchanged. Source filenames appeared in answer text, but OCI returned no
 structured file-citation annotations in these checks.
 
-The interface does not display cost estimates or rate cards. No official billing
-feed is connected. Existing backend price fields are retained for compatibility;
-they are not used by the dashboard, including for previously recorded runs.
+The current interface shows model-token estimates only for runs with complete
+reported usage and a saved price estimate. Coverage and configured rates remain
+explicit; missing usage is not zero. No official billing feed is connected.
 
-The current local deployment uses local agent mapping. Registry routing has not
-been demonstrated against live remote agents in this configuration.
+Those historical local checks used local agent mapping; they did not validate
+remote registry routing in a hosted deployment.
 
-Only administrator-configured profiles are exposed. The application cannot infer
+Baseline OCI profiles are administrator-configured; optional OpenAI and external
+model selections use the provider setup described in [provider notes](cloudworld-local-changes.md). The application cannot infer
 regional model access from a model name. Verify each exact model ID or supported
 model endpoint in your OCI region before adding it. Selecting an unavailable model
 reports a failed run; there is no silent provider/model fallback.
@@ -86,9 +98,9 @@ environment, then .env. Restart after configuration changes.
 
 In a distributed deployment, configure profiles on the **retail agent**; the
 backend gets its catalog through the existing signed agent transport. Backend and
-retail-agent source changes must be deployed together. Do not overwrite the
-separately deployed Langfuse backend with this repository snapshot; merge this
-feature into its source first, as noted in the main README.
+retail-agent source changes must be deployed together. For a second-stage merged Retail + Distributor deployment, merge this source
+release into that branch while preserving its Distributor functionality; see the
+[deployment handoff](ai-world-deployment-handoff.md).
 
 ## Retrieval and tools
 
@@ -123,7 +135,8 @@ closed and appear in the evaluation.
 - Latency records model-call time and full server turn time (including tools and
   history operations); browser/network rendering time is excluded.
 - Session metrics show reported tokens, recorded tool calls, latency and failed
-  runs. Cost is omitted because official billing data is not integrated.
+  runs. Model-cost estimates require complete usage and configured prices;
+  estimates are separate from official billing.
 - Quality displays tool success, citation presence, optional expected-term checks
   and a 1–5 reviewer rating. These are not automatic truth/groundedness judgments.
   Review the actual answer against the retrieved evidence.
@@ -142,7 +155,7 @@ closed and appear in the evaluation.
 
 ## Replacing models and regional access
 
-Current profiles share the configured Responses endpoint, project and identity.
+Baseline OCI profiles share the configured Responses endpoint, project and identity.
 A compatible replacement available there can be registered as another model
 profile without changing the agent graph or business tools. Validate function
 calling, continuation and query quality before adopting it. Changing selection
@@ -169,12 +182,13 @@ when new records are saved. Different sessions cannot read or rate each other's
 runs. Logout/new session does not expose previous session records.
 
 The comparison queue supports one job per session, at most two jobs per process,
-and two or three model runs per job. Each graph has the existing four-model-call
-and eight-function-call limits. Jobs are not automatically replayed after a server
+and two or three concurrent model runs per job. Each conversation graph has the
+existing twelve-model-call and twenty-four-function-call limits; scope checks
+and model-assisted tools can add their own inference calls. Jobs are not automatically replayed after a server
 restart. Completed results persist, and interrupted jobs are marked when queried.
 Use one backend process/replica for this POC queue; multiple replicas need a shared
 job queue and shared telemetry storage before deployment. Polling stops when the
-page is inactive. A failed model does not prevent the next model from running.
+page is inactive. A failed model does not prevent the other models from finishing.
 
 ## Demo sequence
 
@@ -184,36 +198,16 @@ page is inactive. A failed model does not prevent the next model from running.
 4. When a completed store and a compatible profile are verified, enable File
    Search and ask a policy question covered by an ingested document.
    Inspect actual citations and the native File Search event.
-5. Under Model evaluation, select two profiles, enter a common prompt and optional
+5. Under Evaluation & metrics > Model comparison, select two profiles, enter a common prompt and optional
    expected terms, then run the comparison. Review answers and rate quality.
-6. Inspect the performance comparison table and filter Application events by tool
-   or run ID. Use reviewer ratings to assess answer quality against actual data.
+6. Inspect the performance comparison table and recorded Execution traces. Use reviewer ratings to assess answer quality against actual data.
 7. In a distributed deployment with an active registry mapping, verify that the
    routing event says `registry`. Local mode should correctly say `local`.
 
 ## Local commands
 
-From `C:\Users\mrmishr\Desktop\Retail Project\retail-inventory-agent`:
-
-```powershell
-$env:RETAIL_ENV_FILE = 'C:\Users\mrmishr\Desktop\Retail Project\retail-inventory-agent\.env'
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
-```
-
-In a second terminal:
-
-```powershell
-Set-Location 'C:\Users\mrmishr\Desktop\Retail Project\retail-inventory-agent\frontend'
-$env:API_PROXY_TARGET = 'http://127.0.0.1:8000'
-node.exe node_modules\vite\bin\vite.js --host 127.0.0.1 --port 5173 --strictPort
-```
-
-Open `http://127.0.0.1:5173`. These commands use already installed dependencies.
-Alternatively, `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
-.\scripts\start-chat-local.ps1` starts the backend using this repository's `.env`
-and `.venv`. It preserves notification and routing settings from the configuration.
-For a clean dependency installation, use the repository's backend dependency
-instructions and `npm.cmd ci` in frontend.
+Follow the [README local startup instructions](../README.md#run-locally) using
+your own checkout, Python environment and private configuration paths.
 
 Validation:
 

@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from threading import Barrier, Event, Thread
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 from uuid import uuid4
@@ -18,7 +19,7 @@ from app.contracts import ChatRequest
 from app.dependencies import ApplicationContainer
 from app.enterprise_ai.responses import EnterpriseAIResponsesClient
 from app.services.chat_experience import ChatExperienceService, EvaluationRequest
-from app.services.retail_conversation import RetailConversationService
+from app.services.retail_conversation import RetailConversationService, has_unverified_action_claim
 from app.services.sessions import SessionContext
 from app.services.cases import CaseConflict
 from app.session_api import retail_session
@@ -193,6 +194,126 @@ class ChatEvaluationTests(unittest.TestCase):
         self.assertEqual(len(result['results']), 2)
         self.assertNotIn('secret', json.dumps(result))
         self.assertFalse(self.service.pending)
+
+    def test_analytical_claims_are_not_mistaken_for_business_execution(self):
+        for answer in (
+            'I have selected three items for review.',
+            'We selected the top 3 highest-risk products for comparison.',
+            'I have created a comparison table below.',
+            'I completed the inventory analysis.',
+        ):
+            with self.subTest(answer=answer):
+                self.assertFalse(has_unverified_action_claim(answer))
+                service = SimpleNamespace(container=self.container,
+                    _run=Mock(return_value={'answer': answer, 'llm_status': 'completed', 'used_tools': []}))
+                result = self.service._evaluate_checked(service, ChatRequest(message='Compare stock coverage'), self.actor)
+                self.assertEqual(result['message'], answer)
+                self.assertEqual(result['llm_status'], 'completed')
+
+    def test_business_execution_claims_still_blocked_in_comparisons(self):
+        for answer in (
+            'I have selected SUP001.', 'I have selected a supplier for the order.',
+            'I have created an order.', 'I completed the request.', 'We approved it.',
+            'The order has been placed.', 'The supplier was selected.',
+            'I have selected three items and placed an order.',
+            'I created a table. We have sent the supplier request.',
+            'I have completed it.',
+        ):
+            with self.subTest(answer=answer):
+                self.assertTrue(has_unverified_action_claim(answer))
+                service = SimpleNamespace(container=self.container,
+                    _run=Mock(return_value={'answer': answer, 'llm_status': 'completed', 'used_tools': []}))
+                result = self.service._evaluate_checked(service, ChatRequest(message='Compare stock coverage'), self.actor)
+                self.assertEqual(result['llm_status'], 'blocked')
+
+    def test_models_execute_concurrently_with_isolated_clients_and_usage(self):
+        self.enable()
+        barrier = Barrier(2)
+        def generate(client, messages, **options):
+            amount = 10 if client.model_id == 'model-a' else 20
+            if options.get('allow_tools') is False:
+                barrier.wait(timeout=5)
+                output = 'IN_SCOPE'
+            else:
+                output = 'Model ' + client.model_id + ' explains the workflow.'
+            return {'status': 'completed', 'output': output, 'tool_calls': [],
+                    'usage': {'input_tokens': amount, 'output_tokens': 1}}
+        request = EvaluationRequest(message='Explain the approval workflow', model_profiles=['b', 'a'])
+        identifier = self.service.reserve_evaluation(request, session=self.actor)['run_id']
+        with patch.object(EnterpriseAIResponsesClient, 'create_response_sync', generate):
+            self.service.evaluate(identifier, request, self.actor)
+        rows = self.service.get_evaluation(identifier, session=self.actor)['results']
+        self.assertEqual([r['profile_id'] for r in rows], ['b', 'a'])
+        for row, amount in zip(rows, (40, 20)):
+            self.assertEqual(row['llm_status'], 'completed')
+            self.assertEqual(row['metrics']['input_tokens'], amount)
+            self.assertEqual(row['metrics']['profile_id'], row['profile_id'])
+            self.assertIn('model-' + row['profile_id'], row['message'])
+        self.assertIsNone(active_trace.get())
+        self.assertEqual(self.container.responses.model_id, 'baseline-model')
+
+    def test_fast_second_model_published_while_first_still_running(self):
+        self.enable()
+        first_started, release_first, second_published = Event(), Event(), Event()
+        request = EvaluationRequest(message='Question', model_profiles=['a', 'b'])
+        identifier = self.service.reserve_evaluation(request, session=self.actor)['run_id']
+        def respond(body, **kwargs):
+            if body.model_profile == 'a':
+                first_started.set()
+                if not release_first.wait(timeout=5):
+                    raise TimeoutError('test coordination')
+                raise RuntimeError('private provider detail')
+            self.assertTrue(first_started.wait(timeout=5))
+            return {'message': 'Second model answer', 'llm_status': 'completed'}
+        original_save = self.service.store.save
+        def save(owner, run_id, kind, payload):
+            original_save(owner, run_id, kind, payload)
+            if kind == 'comparison' and payload['results'] and payload['results'][0]['profile_id'] == 'b':
+                second_published.set()
+        with patch.object(self.service, 'respond', side_effect=respond), patch.object(self.service.store, 'save', side_effect=save):
+            worker = Thread(target=self.service.evaluate, args=(identifier, request, self.actor))
+            worker.start()
+            try:
+                self.assertTrue(second_published.wait(timeout=5))
+                partial = self.service.get_evaluation(identifier, session=self.actor)
+                self.assertEqual(partial['status'], 'running')
+                self.assertEqual([r['profile_id'] for r in partial['results']], ['b'])
+            finally:
+                release_first.set()
+                worker.join(timeout=5)
+        self.assertFalse(worker.is_alive())
+        rows = self.service.get_evaluation(identifier, session=self.actor)['results']
+        self.assertEqual([r['profile_id'] for r in rows], ['a', 'b'])
+        self.assertEqual(rows[0]['llm_status'], 'failed')
+        self.assertNotIn('private provider detail', json.dumps(rows))
+        self.assertFalse(self.service.pending)
+
+    def test_hosted_comparison_forwards_independent_model_runs_and_context(self):
+        from app.observability.context import request_trace_id
+        self.settings.agent_endpoints = {'retail': 'unused in test'}
+        barrier = Barrier(2)
+        def invoke(operation, payload, actor):
+            if operation == 'chat_catalog':
+                return {'enabled': True, 'models': [p.model_dump() for p in self.settings.chat_model_profiles]}
+            self.assertEqual(operation, 'chat_evaluate')
+            self.assertEqual(actor, self.actor)
+            self.assertEqual(request_trace_id.get(), 'comparison-parent')
+            profile = payload['request']['model_profile']
+            self.assertEqual(active_trace.get().profile.id, profile)
+            barrier.wait(timeout=5)
+            return {'message': profile, 'llm_status': 'completed',
+                    'metrics': ChatTrace(self.settings.chat_model_profiles[0 if profile == 'a' else 1]).finish('completed')}
+        self.container.remote_retail_agent = SimpleNamespace(invoke=invoke)
+        request = EvaluationRequest(message='Explain workflow', model_profiles=['a', 'b'])
+        identifier = self.service.reserve_evaluation(request, session=self.actor)['run_id']
+        token = request_trace_id.set('comparison-parent')
+        try:
+            self.service.evaluate(identifier, request, self.actor)
+        finally:
+            request_trace_id.reset(token)
+        rows = self.service.get_evaluation(identifier, session=self.actor)['results']
+        self.assertEqual([r['message'] for r in rows], ['a', 'b'])
+        self.assertTrue(all(r['metrics']['route'] == 'remote_retail_agent' for r in rows))
 
     def test_api_supplier_denied_and_comparison_owner_checked(self):
         app = FastAPI(); app.include_router(router)

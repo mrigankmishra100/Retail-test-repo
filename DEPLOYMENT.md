@@ -1,4 +1,23 @@
-# V5 one-click deployment test
+# AI World deployment guide
+
+## Current release: ai-world-retail-demo
+
+Deploy [ai-world-retail-demo](https://github.com/mrigankmishra100/Retail-test-repo/tree/ai-world-retail-demo)
+using `deployment/source-build.json`. Start fresh source inspection and build all
+five services from the same commit. The comparison updates affect frontend,
+backend and Retail-agent code; rebuilding only the merged frontend/backend cannot
+update a Retail agent reused from an older first-stage deployment.
+
+The current release adds concurrent comparisons, narrower analytical-claim
+validation, stable partial-result labels and readable wide comparison tables.
+It removes the detailed OCI application events UI while retaining log summaries
+and Langfuse. No additional schema or runtime settings are required by these fixes.
+
+Use the [AI World deployment handoff](docs/ai-world-deployment-handoff.md) for
+private OpenAI setup and the two-stage deployment. The reviewed side-by-side
+dashboard snapshot is `65347b23a5d55e1c8d979532ba2421fdcc925f03`.
+Older release notes below describe provenance and existing runtime behavior;
+the current branch and handoff take precedence over historical release selection.
 
 ## Hosted registry proxy correction (2026-10-19)
 
@@ -23,7 +42,7 @@ replacement image is still required after deployment.
 
 ## Cloudworld update: supplier and delivery chat (2026-10-19)
 
-The release branch is `R-I-Cloudworld`, created from the Demo checkout. Rebuild all five source services
+The earlier release branch was `R-I-Cloudworld`, created from the Demo checkout. Rebuild all five source services
 together after releasing these changes. The release notes below describe historical
 checks; they do not verify this new code in a live tenancy.
 
@@ -49,8 +68,9 @@ frontend together; old image archives do not include this contract update.
 The dashboard may use its own bundled schema. Custom registration works with its
 existing registry table and needs no Delivery DDL or migration 005. Legacy DELIVERY
 entries remain supported. In a supplier session, register an active Custom entry,
-select **Use for delivery questions in this session**, and enter **Bearer token
-(optional)** before submitting. Blank creates an unauthenticated connection; the
+enter **Bearer token (optional)** if required, and submit **Register agent**.
+Registration automatically selects this agent for delivery in that supplier session;
+there is no delivery-selection checkbox. Blank creates an unauthenticated connection; the
 external API must allow that. The current distributor endpoint requires a token.
 Existing entries retain Connect delivery API for reconnecting. The selected entry and token
 are stored together in the private session connection store and take effect immediately without
@@ -227,13 +247,15 @@ application registry gate, not an OCI platform-wide service shutdown.
 
 ## Feature configuration and current limits
 
-- V5 source is present, but the dashboard recipe still selects its baseline model
-  and explicitly disables ApplyGuardrails. Enable guardrails in private runtime
-  configuration only with the required permissions and supported endpoint.
-- OCI logs require configured log/log-group IDs and IAM permissions. The viewer
-  does not provision a log destination. Estimated spend is not an OCI invoice.
-- External model keys are supplied at runtime through the UI, never at image build.
-  Regional evaluation is not offered through the remote Retail-agent route.
+- Source images enable chat prompt guardrails; explicit private configuration can
+  override those defaults. Validate OCI guardrail permissions and endpoint access
+  on the service executing the checks.
+- OCI log summaries require configured log/log-group IDs and IAM permissions.
+  The app does not provision a log destination. The detailed events UI is removed.
+  Estimated spend is not an OCI invoice.
+- Shared OpenAI uses the Retail-agent private runtime key. The separate External
+  model option accepts a session credential through the UI. Neither is baked into
+  images. Regional evaluation is not offered through the remote Retail-agent route.
 - Chat metrics use writable `/tmp/chat-metrics.sqlite3` in these non-root images.
   They are process-local and ephemeral. Sessions, temporary model connections and
   live activity also need appropriate shared storage/routing for multi-replica

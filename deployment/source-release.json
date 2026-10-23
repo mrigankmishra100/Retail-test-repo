@@ -1,49 +1,89 @@
 {
-  "recorded_on": "2026-10-19",
+  "recorded_on": "2026-10-23",
   "release_kind": "source_only",
-  "source_repository": "https://github.com/ORA-AIMLCOE/retail-inventory-agent",
-  "source_branch": "V5",
-  "source_commit": "f81835afaaebc02b0edbf8c1bd4555df71ad9397",
-  "destination_branch": "R-I-Cloudworld",
-  "base_branch": "Retail-Inventory-Demo",
-  "base_commit": "9dd3fcad02fb9f3e3eb7b5e64368ea1625b22ddd",
-  "verification": {
-    "python_tests": 618,
-    "python_subtests": 9,
-    "registry_browser_tests": 15,
-    "chat_browser_tests": 21,
-    "frontend_production_build": "passed",
-    "hosted_frontend_registry_proxy": "passed_real_frontend_to_backend_offline_including_auth_and_delete",
-    "live_initial_release_route_failure": "confirmed_404_unknown_api_route_before_proxy_fix",
-    "dashboard_snapshot_five_services": "passed_offline_10_cases_us_ashburn_1",
-    "latest_private_dashboard_branch": "not_accessible_not_verified",
-    "oci_deployment": "pending",
-    "container_image_builds_for_this_release": "not_run_rebuild_all_five_from_source"
+  "source_repository": "https://github.com/mrigankmishra100/Retail-test-repo",
+  "destination_branch": "ai-world-retail-demo",
+  "base_commit": "32b5125b7188ef457a68f00c7938e2f7f0fa7b66",
+  "source_build_manifest": "deployment/source-build.json",
+  "dashboard_review": {
+    "branch": "feature/retail-distributor-side-by-side",
+    "commit": "65347b23a5d55e1c8d979532ba2421fdcc925f03",
+    "scope": "existing_local_snapshot; latest remote dashboard not checked"
   },
-  "compatibility": [
-    "Five-service source-build contract retained",
-    "Portable public bases and Oracle Thick client retained",
-    "Optional Langfuse and no-send notification diagnostics retained",
-    "Runtime registration inserts missing roles and preserves inactive entries",
-    "Registry enforcement enabled in gateway and agent source targets",
-    "Canonical and short OCI project regions match the dashboard-reviewed validator",
-    "Public image source/assets readable by hosted runtime UID 65532",
-    "Latest permission, region and authenticated runtime-probe overlays validated",
-    "Bundled database schema and supplier policy documents match"
+  "changes": [
+    "Concurrent read-only model comparisons with independent trace context and partial results",
+    "Comparison-only analytical claim exemptions; business action checks retained",
+    "Stable model labels and explicit failures",
+    "Scrollable comparison answer tables",
+    "Remove detailed OCI application events UI; retain summaries and Langfuse",
+    "Refresh README, deployment handoff and evaluation documentation"
   ],
-  "historical_verification_2026_10_15": {
-    "focused_app_python_tests": 125,
-    "focused_dashboard_python_tests": 139,
-    "dashboard_tests_skipped": 2,
-    "current_dashboard_manifest_and_five_runtime_configurations": "passed_offline_10_cases",
-    "registry_deactivation_and_reactivation": "passed_offline_for_retail_and_supplier",
-    "frontend_source_build": "passed_in_linux_container",
-    "image_builds": "passed_all_five_linux_amd64",
-    "container_smoke_checks": "passed_all_five_network_none_read_only_uid_65532",
-    "dashboard_runtime_wrapper": "passed_all_five_startup_health_and_unauthenticated_probe_rejection",
-    "oci_deployment": "not_run_for_this_compatibility_review",
-    "live_notification_publish": "not_tested",
-    "docker_save": "passed_all_five_images_exported_to_discard_sink"
+  "verification": {
+    "focused_python_tests": 247,
+    "python_subtests": 16,
+    "evaluation_browser_tests": 48,
+    "browser_run_note": "47 passed in full suite; stale model-menu assertion corrected and the remaining test passed on targeted rerun",
+    "frontend_production_build": "passed",
+    "hosted_registry_routes": "passed_offline",
+    "dashboard_five_service_settings_and_routing": "passed_offline_us_ashburn_1_with_synthetic_credentials",
+    "container_images_for_this_release": "not_built; operator must rebuild all five from source",
+    "live_oci_rollout_for_this_release": "not_performed"
   },
-  "historical_dashboard_commit_2026_10_15": "4900f90ca3cae3f40634c39169e52694762f81ed"
+  "deployment_requirements": [
+    "Fresh source inspection pinned to this release commit",
+    "Build all five services together for first-stage event deployment",
+    "Merge this source into the second-stage Distributor branch; reuse updated first-stage agents",
+    "Optional OPENAI_API_KEY in private retail-agent runtime configuration only",
+    "Existing delivery connection storage and grants remain required; no additional migrations in this update",
+    "Single instance per service with current comparison queue"
+  ],
+  "historical_source_release_2026_10_19": {
+    "recorded_on": "2026-10-19",
+    "release_kind": "source_only",
+    "source_repository": "https://github.com/ORA-AIMLCOE/retail-inventory-agent",
+    "source_branch": "V5",
+    "source_commit": "f81835afaaebc02b0edbf8c1bd4555df71ad9397",
+    "destination_branch": "R-I-Cloudworld",
+    "base_branch": "Retail-Inventory-Demo",
+    "base_commit": "9dd3fcad02fb9f3e3eb7b5e64368ea1625b22ddd",
+    "verification": {
+      "python_tests": 618,
+      "python_subtests": 9,
+      "registry_browser_tests": 15,
+      "chat_browser_tests": 21,
+      "frontend_production_build": "passed",
+      "hosted_frontend_registry_proxy": "passed_real_frontend_to_backend_offline_including_auth_and_delete",
+      "live_initial_release_route_failure": "confirmed_404_unknown_api_route_before_proxy_fix",
+      "dashboard_snapshot_five_services": "passed_offline_10_cases_us_ashburn_1",
+      "latest_private_dashboard_branch": "not_accessible_not_verified",
+      "oci_deployment": "pending",
+      "container_image_builds_for_this_release": "not_run_rebuild_all_five_from_source"
+    },
+    "compatibility": [
+      "Five-service source-build contract retained",
+      "Portable public bases and Oracle Thick client retained",
+      "Optional Langfuse and no-send notification diagnostics retained",
+      "Runtime registration inserts missing roles and preserves inactive entries",
+      "Registry enforcement enabled in gateway and agent source targets",
+      "Canonical and short OCI project regions match the dashboard-reviewed validator",
+      "Public image source/assets readable by hosted runtime UID 65532",
+      "Latest permission, region and authenticated runtime-probe overlays validated",
+      "Bundled database schema and supplier policy documents match"
+    ],
+    "historical_verification_2026_10_15": {
+      "focused_app_python_tests": 125,
+      "focused_dashboard_python_tests": 139,
+      "dashboard_tests_skipped": 2,
+      "current_dashboard_manifest_and_five_runtime_configurations": "passed_offline_10_cases",
+      "registry_deactivation_and_reactivation": "passed_offline_for_retail_and_supplier",
+      "frontend_source_build": "passed_in_linux_container",
+      "image_builds": "passed_all_five_linux_amd64",
+      "container_smoke_checks": "passed_all_five_network_none_read_only_uid_65532",
+      "dashboard_runtime_wrapper": "passed_all_five_startup_health_and_unauthenticated_probe_rejection",
+      "oci_deployment": "not_run_for_this_compatibility_review",
+      "live_notification_publish": "not_tested",
+      "docker_save": "passed_all_five_images_exported_to_discard_sink"
+    },
+    "historical_dashboard_commit_2026_10_15": "4900f90ca3cae3f40634c39169e52694762f81ed"
+  }
 }

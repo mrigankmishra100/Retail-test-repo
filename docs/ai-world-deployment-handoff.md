@@ -5,8 +5,12 @@ Source branch: `ai-world-retail-demo` in `mrigankmishra100/Retail-test-repo`.
 This release includes supplier delivery routing fixes, automatic session selection
 when a supplier registers a Custom agent, optional bearer-token entry, shared
 OpenAI model selection, a compact model dialog, and usage-aware cost displays.
-It introduces no database tables or migrations and retains the five-service build
-manifest in `deployment/source-build.json`.
+It also includes concurrent model comparisons, corrected analytical-claim checks,
+stable partial-result labels, scrollable comparison tables and removal of the
+OCI application events browser. It retains `deployment/source-build.json`.
+These updates add no tables or migrations beyond the existing delivery-connection
+storage introduced in R-I-Cloudworld. That Oracle fallback still needs the grants
+or owner setup documented in DEPLOYMENT.md.
 
 ## OpenAI configuration for the dashboard owner
 
@@ -52,7 +56,8 @@ Based on Deployment_Automation's `feature/retail-distributor-side-by-side` branc
 reviewed at commit `65347b23a5d55e1c8d979532ba2421fdcc925f03`:
 
 1. Deploy all five services from this Retail branch. Configure the OpenAI key on
-   the Retail agent in this first deployment.
+   the Retail agent in this first deployment. Use the latest source commit so the
+   Retail agent also includes the comparison guardrail fix.
 2. Before building the merged Retail + Distributor branch for the second stage,
    merge this release into that source branch and resolve conflicts while keeping
    its Distributor functionality. In particular, retain the new frontend model
@@ -71,6 +76,9 @@ configuration to the replacement as well.
 - In retail chat, select OpenAI, load a compatible Responses/function-calling
   model, ask an inventory question, and check that the reported provider/model
   matches. Verify the key is not returned to the browser.
+- Compare two models: verify that each result appears independently with the right
+  model label, failures remain visible, and wide tables scroll inside the card.
+  Model latency and answer quality can still differ; provider limits still apply.
 - Exercise the existing replenishment workflow and explicit approval controls.
 - In supplier chat, ask a delivery question before registration, register an
   active compatible Custom API with its optional token, then ask again in the
