@@ -5,7 +5,7 @@ Source branch: [`ai-world-retail-demo`](https://github.com/mrigankmishra100/Reta
 Retail and Supplier workspaces for inventory analysis, supplier comparisons and
 replenishment with explicit approval controls. The optional delivery integration
 connects Supplier chat to a registered external question/answer API. Retail users
-can select OCI models or a privately configured OpenAI model.
+can select OCI models or OpenAI using a shared server key or their own session key.
 
 ## Deploy this branch
 
@@ -42,7 +42,8 @@ operational limits.
   Explicit delivery questions call the connected API directly after input checks;
   other conversational questions can use the Supplier model and scoped tools.
   The registry is application-specific REST integration, not an A2A registry.
-- Retail OpenAI selection uses a server-side key and the provider's model catalog.
+- Retail OpenAI selection uses a shared server key and the provider's model catalog.
+  If no shared key is configured, the picker accepts a private session API key.
   It applies to retail chat and remaining workflow AI steps; approval controls
   remain explicit. Supplier chat retains its own configured model.
 - Model comparison runs two or three models concurrently with independent context
@@ -65,6 +66,9 @@ images. For shared OpenAI, set `OPENAI_API_KEY` in the hosted **retail-agent**
 private runtime JSON. Setting it only on the dashboard VM or a developer laptop
 is insufficient. The [handoff](docs/ai-world-deployment-handoff.md) explains the
 configuration helper and automatic versus manual provisioning. Without the key,
+the OpenAI picker asks for a session API key instead; no dashboard code or runtime
+configuration change is needed for this fallback. Session keys stay in server
+memory and must be entered again after session expiry or a server restart.
 OCI model options remain usable.
 
 Delivery registration stores its credential separately from `agent_registry`.

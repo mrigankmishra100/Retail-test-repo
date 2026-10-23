@@ -29,7 +29,10 @@ not sign outbound OCI IAM requests.
 
 **OpenAI…** appears after the two baseline retail models. It loads the catalog using
 the key configured on the Retail model host. Users select a model without receiving
-or entering that key. The existing External model option remains available.
+or entering that key. If no shared key is configured, the picker instead accepts
+an API key for the current session and loads models using that key. It is sent
+through the authenticated backend to the Retail agent and held in session memory,
+never browser storage. The existing External model option remains available.
 
 The selection applies to retail chat and remaining workflow AI steps through the
 existing provider adapter. Supplier chat retains its configured supplier model.
@@ -54,7 +57,7 @@ These are model-token estimates, not cloud bills. Missing usage displays as
 
 Set `OPENAI_API_KEY` in the local backend environment or hosted **retail-agent** private
 runtime JSON. It is optional: omitting it leaves baseline models operational and
-shows a configuration error only when OpenAI is selected. No key belongs in source,
+allows session-key entry when OpenAI is selected. No key belongs in source,
 Docker build arguments, frontend configuration or Git. Shared selections use the
 existing session model store and must be reselected after a server restart.
 
@@ -125,7 +128,9 @@ that service. Do not silently overwrite an existing dashboard-managed config
 object: deployment recovery tracks its hash. Prepare a new private configuration
 object/revision and point the Retail runtime at it through the operator's existing
 deployment process, preserving all other fields. No dashboard source-code change
-is required, but that runtime secret configuration step is required for hosted OpenAI.
+is required. This runtime secret configuration step is only required for shared-key
+OpenAI; session-key entry works without it or dashboard changes using the existing
+external-model API. Both kinds of selection require reconnection after expiry or restart.
 
 No cloud deployment is performed by the compatibility checks. The local key does
 not travel with a Git push or source build.
