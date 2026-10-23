@@ -2,8 +2,9 @@
 
 ## What is included
 
-`retail-distributor-merged` combines the integration branch at `a0119e2` with
-`ai-world-retail-demo` at `7a9d3e9`; their shared Cloudworld base is
+`feature/retail-distributor-integration` retains the integration from `a0119e2`
+and includes Retail updates through `b47b349`, also incorporated into
+`R-I-Cloudworld`; their shared Cloudworld base is
 `b2698eefa6adcff596947771e499cb8313dea412`. It retains the Distributor implementation
 and incorporates the latest Retail/Supplier delivery routing, OpenAI model picker,
 comparison fixes and UI updates. Existing role and backend boundaries are retained. Distributor runs **inside the
@@ -202,9 +203,10 @@ Additional local Ashburn preflight on 2026-10-21:
 
 ## Before VM deployment
 
-For this merged release, deploy the five-service `ai-world-retail-demo` release
-at `7a9d3e9` first, then select `retail-distributor-merged` for the side-by-side
-backend/frontend update. Configure OpenAI on the reused Retail agent; Distributor
+For this merged release, deploy the latest five-service `R-I-Cloudworld` release
+first, then select `feature/retail-distributor-integration` for the side-by-side
+backend/frontend update. OpenAI accepts a session key from the frontend, or an
+optional shared key configured on the reused Retail agent; Distributor
 continues using its separate OCI settings. The [deployment handoff](ai-world-deployment-handoff.md)
 explains the private key and first-stage version requirement.
 

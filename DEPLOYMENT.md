@@ -1,22 +1,23 @@
 # Retail + Distributor deployment guide
 
-## Current merged release: retail-distributor-merged
+## Current merged release: feature/retail-distributor-integration
 
 This branch retains the Distributor integration from `a0119e2` and incorporates
-AI World Retail changes through `7a9d3e9`. Use the dashboard's side-by-side update
+AI World Retail changes through `b47b349`. Use the dashboard's side-by-side update
 flow to build this branch's backend/frontend and reuse the completed first-stage
 Retail, Supplier and MCP services. See [Distributor integration](docs/distributor-integration.md)
 for required private settings, seven namespaced tables and knowledge preparation.
 The full source-build manifest remains five-service for compatibility; it must not
 be mistaken for the two-service update contract in `deployment/distributor-integration.json`.
 
-The first-stage Retail agent must include the latest comparison fix and private
-OpenAI setting before reuse. No additional Distributor schema or API changes were
+The first-stage Retail agent must include the latest comparison fix and external-model
+support before reuse. A shared OpenAI key is optional; the updated frontend can
+accept a session key instead. No additional Distributor schema or API changes were
 introduced by this merge. Source changes do not populate knowledge or grant IAM.
 
-## First-stage Retail release: ai-world-retail-demo
+## First-stage Retail release: R-I-Cloudworld
 
-Deploy [ai-world-retail-demo](https://github.com/mrigankmishra100/Retail-test-repo/tree/ai-world-retail-demo)
+Deploy [R-I-Cloudworld](https://github.com/mrigankmishra100/Retail-test-repo/tree/R-I-Cloudworld)
 using `deployment/source-build.json`. Start fresh source inspection and build all
 five services from the same commit. The comparison updates affect frontend,
 backend and Retail-agent code; rebuilding only the merged frontend/backend cannot

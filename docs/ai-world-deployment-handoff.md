@@ -1,7 +1,8 @@
 # AI World Retail demo: deployment handoff
 
-First-stage source: `ai-world-retail-demo` at `4f0eb0e` in `mrigankmishra100/Retail-test-repo`.
-Second-stage source: `retail-distributor-merged`, integrating that Retail release
+First-stage source: `R-I-Cloudworld` in `mrigankmishra100/Retail-test-repo`,
+including Retail updates through `b47b349`.
+Second-stage source: `feature/retail-distributor-integration`, integrating that Retail release
 with `feature/retail-distributor-integration` at `a0119e2`.
 
 This release includes supplier delivery routing fixes, automatic session selection
@@ -67,11 +68,11 @@ the dashboard owner to wire the additional setting into its provisioning code.
 Based on Deployment_Automation's `feature/retail-distributor-side-by-side` branch,
 reviewed at commit `65347b23a5d55e1c8d979532ba2421fdcc925f03`:
 
-1. Deploy all five services from `ai-world-retail-demo` at `4f0eb0e` or a compatible
-   later release. Optionally configure a shared OpenAI key on the Retail agent,
+1. Deploy all five services from the latest `R-I-Cloudworld` commit.
+   Optionally configure a shared OpenAI key on the Retail agent,
    or use session-key entry. Use the latest source commit so the
    Retail agent also includes the comparison guardrail fix.
-2. Use `retail-distributor-merged` for the second stage. It already includes the
+2. Use `feature/retail-distributor-integration` for the second stage. It already includes the
    Retail release and preserves Distributor functionality, including its prepared
    knowledge and Oracle JSON embedding support. Supply the Distributor-specific
    backend configuration and preparation steps from `distributor-integration.md`.

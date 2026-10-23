@@ -1,9 +1,9 @@
 # Retail + Distributor — AI World merged demo
 
-Source branch: [`retail-distributor-merged`](https://github.com/mrigankmishra100/Retail-test-repo/tree/retail-distributor-merged).
+Source branch: [`feature/retail-distributor-integration`](https://github.com/mrigankmishra100/Retail-test-repo/tree/feature/retail-distributor-integration).
 
-Integrates `feature/retail-distributor-integration` at `a0119e2` with
-`ai-world-retail-demo` at `4f0eb0e`. The existing Distributor RAG implementation,
+Retains the Distributor integration from `a0119e2` and includes the Retail updates
+through `b47b349`, also incorporated into `R-I-Cloudworld`. The existing Distributor RAG implementation,
 prepared JSON/native embedding support and chat-only role are retained.
 
 Retail and Supplier workspaces for inventory analysis, supplier comparisons and
@@ -17,11 +17,12 @@ Use the dashboard's **Retail + Distributor side-by-side update flow** for this
 branch:
 
 ```text
-https://github.com/mrigankmishra100/Retail-test-repo/tree/retail-distributor-merged
+https://github.com/mrigankmishra100/Retail-test-repo/tree/feature/retail-distributor-integration
 ```
 
-1. First deploy all five services from `ai-world-retail-demo` at `7a9d3e9` or a
-   compatible later release. Configure shared OpenAI on that Retail agent if needed.
+1. First deploy all five services from the latest `R-I-Cloudworld` commit, which
+   includes Retail updates through `b47b349`. Use session-key entry for OpenAI,
+   or optionally configure a shared key on that Retail agent.
 2. For the second stage, build the **backend and frontend** from this merged branch.
    The update flow reuses the first deployment's Retail, Supplier and MCP endpoints
    and shared resources, while supplying a new private backend configuration with

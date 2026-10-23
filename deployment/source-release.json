@@ -2,7 +2,8 @@
   "recorded_on": "2026-10-23",
   "release_kind": "source_merge",
   "source_repository": "https://github.com/mrigankmishra100/Retail-test-repo",
-  "destination_branch": "retail-distributor-merged",
+  "destination_branch": "feature/retail-distributor-integration",
+  "incorporated_source": {"branch": "retail-distributor-merged", "commit": "15f542cc8878357a43480e163024752a421951eb"},
   "integration_parent": {
     "branch": "feature/retail-distributor-integration",
     "commit": "a0119e293bb9a3b431002a19e3e0945c0bffb003"
@@ -38,9 +39,9 @@
     "Legacy external-model test updated for concurrent call ordering; no new runtime changes beyond parent branches"
   ],
   "deployment_requirements": [
-    "Deploy first-stage five services from ai-world-retail-demo at 7a9d3e9",
+    "Deploy first-stage five services from the latest R-I-Cloudworld commit including Retail updates through b47b349",
     "Build second-stage backend/frontend from this branch via the side-by-side dashboard flow",
-    "Reuse updated Retail/Supplier/MCP services and preserve private OPENAI_API_KEY on Retail agent",
+    "Reuse updated Retail/Supplier/MCP services; OpenAI supports session-key entry or optional private OPENAI_API_KEY on Retail agent",
     "Retain Distributor private model/embedding settings, prepared knowledge and seven namespaced tables",
     "Do not run legacy empty-schema cleanup on shared resources"
   ],
