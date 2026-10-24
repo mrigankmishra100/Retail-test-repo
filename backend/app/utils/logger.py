@@ -39,6 +39,7 @@ CONTEXT_FIELDS = (
     "not_delivered", "retryable",
     "protocol_error_code", "validation_errors", "error_count",
     "release_tag", "features",
+    "oci_provider_error", "oci_response_context",
     "security_event_id", "security_provider", "security_categories", "guardrail_version",
 )
 

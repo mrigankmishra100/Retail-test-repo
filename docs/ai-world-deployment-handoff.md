@@ -98,3 +98,35 @@ configuration to the replacement as well.
 
 Source/configuration checks are not a live OCI deployment test. Build and exercise
 the images and both hosted URLs as part of the event deployment.
+
+## OCI Responses / File Search diagnostics
+
+Rebuild the **Retail-agent image** from this branch for these diagnostics. Updating
+only the frontend or gateway, or reusing an older Retail-agent image in the second
+deployment stage, will not include the new logging. No dashboard code change or
+new runtime setting is required; existing OCI application-log forwarding must
+remain enabled to view these events in Langfuse.
+
+For a failed request, search Langfuse Tracing with
+`output:<retail-agent-trace-id> output:"OCI Responses"` and open the `oci.log`
+entry. Under its `log_content.content`, inspect:
+
+- `timestamp`, `trace_id`, `http_status`, `opc_request_id`, and `duration_ms`.
+- `oci_provider_error`: bounded JSON provider `code`, `type`, `param`, and
+  sanitized `message`, when supplied. `body_status` explains empty, non-JSON,
+  oversized, or unreadable errors; raw bodies are never logged.
+- `oci_response_context`: model/project IDs, vector-store IDs, tool types,
+  File Search flag, tool-choice type/mode, include options, and token/tool limits.
+
+Failures are emitted at ERROR level in the application log; the Langfuse
+forwarder may still label its wrapper span Default. Search the content rather
+than relying solely on the span's level. The inner timestamp is the call time;
+the forwarded entry can have a later timestamp.
+
+The diagnostic fields exclude raw requests, responses, authorization headers,
+and tool arguments. Provider messages redact known credentials, echoed request
+text, and quoted values. Detailed errors stay in operator logs; user-facing
+errors and existing request/retry behavior are unchanged. This instrumentation
+does not itself fix the underlying OCI HTTP 400/500 cause. Reproduce once with
+File Search enabled, compare with it disabled, and use the new details and OCI
+request ID to determine the fix.

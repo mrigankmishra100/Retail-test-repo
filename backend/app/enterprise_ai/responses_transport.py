@@ -17,6 +17,103 @@ from app.observability.context import request_trace_id
 
 logger = logging.getLogger(__name__)
 MAX_RESPONSE_BYTES = 2_000_000
+MAX_ERROR_BYTES = 16_384
+
+
+def _diagnostic_text(value, *, body=None, secrets=()):
+    """Bound provider text and remove credentials and echoed request text."""
+    if not isinstance(value, (str, int, float)) or isinstance(value, bool):
+        return None
+    text = str(value)
+    for secret in secrets:
+        if isinstance(secret, str) and secret:
+            text = text.replace(secret, '[REDACTED]')
+
+    def redact_content(value):
+        nonlocal text
+        if isinstance(value, str) and value:
+            text = text.replace(value, '[REDACTED INPUT]')
+        elif isinstance(value, list):
+            for item in value:
+                redact_content(item)
+        elif isinstance(value, dict):
+            for key, item in value.items():
+                if key in {'content', 'text', 'arguments', 'output', 'input', 'instructions'}:
+                    redact_content(item)
+
+    if isinstance(body, dict):
+        redact_content(body)
+    text = re.sub(r'(?i)\b(?:Bearer|Basic)\s+\S+', '[REDACTED AUTH]', text)
+    text = re.sub(r'\bsk-[A-Za-z0-9_-]+', '[REDACTED KEY]', text)
+    text = re.sub(r'(?is)-----BEGIN .*?PRIVATE KEY-----.*', '[REDACTED KEY]', text)
+    text = re.sub(r'''(?i)\b(api[_-]?key|token|secret|password|signature)\s*[=:]\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)''',
+                  r'\1=[REDACTED]', text)
+    # Provider errors may quote a fragment rather than the full input. Keep
+    # parameter names separately; omit quoted values from the explanatory text.
+    text = re.sub(r'"[^"\n]*"|\x27[^\x27\n]*\x27|`[^`\n]*`', '[REDACTED VALUE]', text)
+    return re.sub(r'\s+', ' ', text).strip()[:1024]
+
+
+def _provider_error(exc, *, body=None, secrets=()):
+    """Read only a bounded JSON error envelope, never headers or a raw body."""
+    details = {}
+    try:
+        raw = exc.read(MAX_ERROR_BYTES + 1)
+        if len(raw) > MAX_ERROR_BYTES:
+            return {'body_status': 'too_large'}
+        try:
+            data = json.loads(raw)
+        except (ValueError, UnicodeError):
+            return {'body_status': 'empty' if not raw else 'non_json'}
+        error = data.get('error', data) if isinstance(data, dict) else None
+        if not isinstance(error, dict):
+            return {'body_status': 'unrecognized'}
+        details['body_status'] = 'json'
+        for key in ('code', 'type', 'param'):
+            value = error.get(key)
+            if isinstance(value, (str, int)) and not isinstance(value, bool):
+                value = str(value)
+                # These are identifiers, not arbitrary provider-supplied text.
+                if re.fullmatch(r'[A-Za-z0-9_.\[\]-]{1,128}', value) and not value.startswith('sk-'):
+                    if not any(secret and secret in value for secret in secrets):
+                        details[key] = value
+        message = _diagnostic_text(error.get('message'), body=body, secrets=secrets)
+        if message:
+            details['message'] = message
+    except Exception:
+        details['body_status'] = 'read_failed'
+    return details
+
+
+def _request_context(body, project_id):
+    """Allowlisted configuration only: no prompts, tool arguments, or headers."""
+    context = {'project_id': project_id}
+    if not isinstance(body, dict):
+        return context
+
+    def identifier(value):
+        return isinstance(value, str) and re.fullmatch(r'[A-Za-z0-9_.:-]{1,256}', value)
+
+    if identifier(body.get('model')):
+        context['model_id'] = body['model']
+    tools = body.get('tools', [])
+    tools = tools if isinstance(tools, list) else []
+    context['tool_types'] = sorted({t['type'] for t in tools if isinstance(t, dict) and identifier(t.get('type'))})[:32]
+    context['file_search_enabled'] = 'file_search' in context['tool_types']
+    context['vector_store_ids'] = [v for t in tools if isinstance(t, dict) and t.get('type') == 'file_search'
+                                   and isinstance(t.get('vector_store_ids'), list)
+                                   for v in t['vector_store_ids'] if identifier(v)][:4]
+    choice = body.get('tool_choice')
+    if isinstance(choice, dict):
+        context['tool_choice'] = {k: choice[k] for k in ('type', 'mode') if identifier(choice.get(k))}
+    elif identifier(choice):
+        context['tool_choice'] = choice
+    include = body.get('include')
+    context['include'] = [v for v in include if identifier(v)][:8] if isinstance(include, list) else []
+    for key in ('max_output_tokens', 'max_tool_calls', 'parallel_tool_calls', 'store'):
+        if isinstance(body.get(key), (int, bool)):
+            context[key] = body[key]
+    return context
 
 
 def validate_genai_key(secret):
@@ -107,7 +204,9 @@ class OCIResponsesTransport:
         operation = method + " " + path.split("/")[1]
         started, status, request_id, outcome = monotonic(), None, None, "unavailable"
         stage, error_type = 'request_preparation', None
+        provider_error, context, diagnostic_secrets = None, None, []
         try:
+            context = _request_context(body, self.project_id)
             data = json.dumps(body, ensure_ascii=False, allow_nan=False).encode("utf-8") if body is not None else None
             if data is not None and len(data) > MAX_RESPONSE_BYTES:
                 raise ValueError("OCI request exceeds size limit")
@@ -120,6 +219,10 @@ class OCIResponsesTransport:
                 prepared = requests.Request(method, url, data=data, headers=headers).prepare()
                 self._signer()(prepared)
                 headers = dict(prepared.headers)
+            diagnostic_secrets = [value for key, value in headers.items()
+                                  if key.lower() == 'authorization']
+            if self.responses_auth_mode == 'genai_api_key':
+                diagnostic_secrets.append(validate_genai_key(self._genai_api_key))
             request = Request(url, method=method, data=data, headers=headers)
             stage = 'provider_request'
             with build_opener(NoRedirect()).open(request, timeout=self.timeout) as response:
@@ -137,6 +240,7 @@ class OCIResponsesTransport:
         except HTTPError as exc:
             error_type = type(exc).__name__
             status, request_id = exc.code, exc.headers.get("opc-request-id")
+            provider_error = _provider_error(exc, body=body, secrets=diagnostic_secrets)
             exc.close()
             code = {400: 'request_rejected', 401: 'authentication_failed', 403: 'access_denied',
                     404: 'model_or_resource_unavailable', 429: 'rate_limited'}.get(status, 'provider_unavailable')
@@ -146,8 +250,10 @@ class OCIResponsesTransport:
             raise OCIResponsesUnavailable("OCI Responses request failed") from None
         finally:
             safe_request_id = request_id if isinstance(request_id, str) and re.fullmatch(r"[A-Za-z0-9/_-]{1,256}", request_id) else None
-            logger.info("OCI Responses operation=%s auth=%s status=%s http_status=%s opc_request_id=%s elapsed_ms=%d",
+            logger.log(logging.INFO if outcome == 'success' else logging.ERROR,
+                "OCI Responses operation=%s auth=%s status=%s http_status=%s opc_request_id=%s elapsed_ms=%d",
                 operation, self.responses_auth_mode, outcome, status, safe_request_id, int((monotonic() - started) * 1000),
                 extra={"trace_id": request_trace_id.get(), 'stage': stage, 'status': outcome,
                        'http_status': status, 'opc_request_id': safe_request_id,
+                       'oci_provider_error': provider_error, 'oci_response_context': context,
                        'error_type': error_type, 'duration_ms': round((monotonic()-started)*1000, 2)})
